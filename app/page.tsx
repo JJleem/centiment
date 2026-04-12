@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Smartphone, Play, BarChart3, ChevronRight } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
+import HistorySection from "@/components/HistorySection";
 import type { Platform } from "@/types";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
@@ -208,6 +209,8 @@ export default function HomePage() {
             </div>
           )}
         </section>
+
+        <HistorySection />
       </div>
     </main>
   );
