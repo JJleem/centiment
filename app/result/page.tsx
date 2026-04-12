@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Smartphone, Play, TrendingUp, AlertCircle, Minus, Tag, MessageSquare, BarChart2 } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import ReviewList from "@/components/ReviewList";
+import ReanalyzeButton from "@/components/ReanalyzeButton";
 import type { Platform, Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -182,23 +183,26 @@ async function Dashboard({ app_id, platform }: { app_id: string; platform: Platf
       <div className="max-w-3xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{game?.emoji ?? "🎮"}</span>
-              <h1 className="text-xl font-bold">{game?.name ?? app_id}</h1>
-              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                {platform === "ios" ? <Smartphone size={11} /> : <Play size={11} />}
-                {platform === "ios" ? "iOS" : "Android"}
-              </Badge>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors mt-1">
+              <ArrowLeft size={20} />
+            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{game?.emoji ?? "🎮"}</span>
+                <h1 className="text-xl font-bold">{game?.name ?? app_id}</h1>
+                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                  {platform === "ios" ? <Smartphone size={11} /> : <Play size={11} />}
+                  {platform === "ios" ? "iOS" : "Android"}
+                </Badge>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                최근 리뷰 100건 기준 · 분석 완료 {data.total}건
+              </p>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              최근 리뷰 100건 기준 · 분석 완료 {data.total}건
-            </p>
           </div>
+          <ReanalyzeButton app_id={app_id} platform={platform} />
         </div>
 
         {/* AI 인사이트 요약 */}
