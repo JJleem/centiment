@@ -59,7 +59,10 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ app_id: appId, platform, count: 100 }),
       });
-      if (!fetchRes.ok) throw new Error("리뷰 수집 실패");
+      if (!fetchRes.ok) {
+        const body = await fetchRes.json().catch(() => ({}));
+        throw new Error(`[리뷰 수집 실패] ${body.error ?? fetchRes.statusText}`);
+      }
 
       // 2. Analyze
       setStep("analyzing");
@@ -68,7 +71,10 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ app_id: appId, platform }),
       });
-      if (!analyzeRes.ok) throw new Error("분석 실패");
+      if (!analyzeRes.ok) {
+        const body = await analyzeRes.json().catch(() => ({}));
+        throw new Error(`[Claude 분석 실패] ${body.error ?? analyzeRes.statusText}`);
+      }
 
       setStep("done");
       setTimeout(() => {
@@ -190,7 +196,16 @@ export default function HomePage() {
 
           {/* Error */}
           {step === "error" && (
-            <p className="mt-3 text-sm text-red-500 text-center">{errorMsg}</p>
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-rose-600">오류가 발생했습니다</p>
+              <p className="text-xs text-rose-500 break-all">{errorMsg}</p>
+              <button
+                onClick={() => setStep("idle")}
+                className="text-xs text-rose-400 underline underline-offset-2 hover:text-rose-600"
+              >
+                닫고 다시 시도
+              </button>
+            </div>
           )}
         </section>
       </div>
