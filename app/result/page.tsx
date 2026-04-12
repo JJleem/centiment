@@ -198,7 +198,7 @@ async function Dashboard({ app_id, platform }: { app_id: string; platform: Platf
                 </Badge>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                최근 리뷰 100건 기준 · 분석 완료 {data.total}건
+                EN·KO·JA·DE 다국어 · 분석 완료 {data.total}건
               </p>
             </div>
           </div>

@@ -11,14 +11,14 @@ export function buildClassifyPrompt(batch: ReviewPayload[]): string {
     )
     .join("\n\n");
 
-  return `You are a mobile game review analyst. Classify each review below.
+  return `You are a mobile game review analyst. Reviews may be in any language (English, Korean, Japanese, German, etc.) — classify them all the same way.
 
 Return ONLY a JSON array (no markdown, no explanation) with exactly ${batch.length} objects in order:
 [
   {
     "sentiment": "positive" | "negative" | "neutral",
     "category": "gameplay" | "ui" | "performance" | "monetization" | "content" | "bug" | "other",
-    "keywords": [up to 3 short English keywords]
+    "keywords": [up to 3 short English keywords translated from the review]
   },
   ...
 ]
@@ -26,7 +26,7 @@ Return ONLY a JSON array (no markdown, no explanation) with exactly ${batch.leng
 Rules:
 - sentiment: positive(4-5★ praise), negative(1-2★ complaints or 3★ mixed criticism), neutral(3★ balanced)
 - category: pick the single most dominant topic
-- keywords: lowercase, max 3 words each
+- keywords: always output in English regardless of review language, lowercase, max 3 words each
 
 Reviews:
 ${items}`;

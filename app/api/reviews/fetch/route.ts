@@ -2,35 +2,54 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase";
 import type { FetchReviewsRequest, FetchReviewsResponse, Platform } from "@/types";
 
-// ─── Scraper imports (CommonJS) ──────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const gplayScraper = require("google-play-scraper").default;
 
-// ─── Normalized shape after scraping ────────────────────────────────────────
+// ─── 수집 대상 로케일 ──────────────────────────────────────────────────────────
+const IOS_STOREFRONTS = [
+  { lang: "en", storefront: "143441-1,29" }, // 미국
+  { lang: "ko", storefront: "143466-1,29" }, // 한국
+  { lang: "ja", storefront: "143462-1,29" }, // 일본
+  { lang: "de", storefront: "143443-1,29" }, // 독일
+];
+
+const ANDROID_LOCALES = [
+  { lang: "en", country: "us" },
+  { lang: "ko", country: "kr" },
+  { lang: "ja", country: "jp" },
+  { lang: "de", country: "de" },
+];
+
+const PER_LOCALE = 40; // 로케일당 수집 건수
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface ScrapedReview {
   app_id: string;
   platform: Platform;
+  lang: string;
   version: string | null;
   rating: number;
   content: string;
   review_date: string;
 }
 
-// ─── iOS scraper (MZStore API) ───────────────────────────────────────────────
 interface MZReview {
-  userReviewId: string;
   body: string;
   date: string;
   rating: number;
-  title: string;
 }
 
-async function fetchMZStorePage(appId: string, startIndex: number): Promise<MZReview[]> {
+// ─── iOS: 로케일별 수집 ───────────────────────────────────────────────────────
+async function fetchMZStorePage(
+  appId: string,
+  storefront: string,
+  startIndex: number
+): Promise<MZReview[]> {
   const url = `https://itunes.apple.com/WebObjects/MZStore.woa/wa/userReviewsRow?id=${appId}&displayable-kind=11&startIndex=${startIndex}&endIndex=${startIndex + 19}&sort=4`;
   const res = await fetch(url, {
     headers: {
       "User-Agent": "iTunes/12.0 (Macintosh; OS X 10.15)",
-      "X-Apple-Store-Front": "143441-1,29",
+      "X-Apple-Store-Front": storefront,
     },
   });
   if (!res.ok) return [];
@@ -38,16 +57,19 @@ async function fetchMZStorePage(appId: string, startIndex: number): Promise<MZRe
   return json.userReviewList ?? [];
 }
 
-async function fetchIosReviews(appId: string, count: number): Promise<ScrapedReview[]> {
-  const pages = Math.ceil(Math.min(count, 100) / 20);
+async function fetchIosLocale(
+  appId: string,
+  lang: string,
+  storefront: string
+): Promise<ScrapedReview[]> {
+  const pages = Math.ceil(PER_LOCALE / 20);
   const results = await Promise.all(
-    Array.from({ length: pages }, (_, i) => fetchMZStorePage(appId, i * 20))
+    Array.from({ length: pages }, (_, i) => fetchMZStorePage(appId, storefront, i * 20))
   );
-
-  const flat = results.flat();
-  return flat.slice(0, count).map((r) => ({
+  return results.flat().slice(0, PER_LOCALE).map((r) => ({
     app_id: appId,
-    platform: "ios",
+    platform: "ios" as Platform,
+    lang,
     version: null,
     rating: r.rating,
     content: r.body,
@@ -55,34 +77,51 @@ async function fetchIosReviews(appId: string, count: number): Promise<ScrapedRev
   }));
 }
 
-// ─── Android scraper ──────────────────────────────────────────────────────────
-async function fetchAndroidReviews(packageName: string, count: number): Promise<ScrapedReview[]> {
-  const result = await gplayScraper.reviews({
-    appId: packageName,
-    lang: "en",
-    country: "us",
-    sort: gplayScraper.sort.NEWEST,
-    num: Math.min(count, 200),
-  });
-
-  const items = (result.data ?? result) as {
-    score: number;
-    text: string;
-    version: string;
-    date: string;
-  }[];
-
-  return items.slice(0, count).map((r) => ({
-    app_id: packageName,
-    platform: "android",
-    version: r.version ?? null,
-    rating: r.score,
-    content: r.text ?? "",
-    review_date: new Date(r.date).toISOString(),
-  }));
+async function fetchIosReviews(appId: string): Promise<ScrapedReview[]> {
+  const results = await Promise.all(
+    IOS_STOREFRONTS.map(({ lang, storefront }) => fetchIosLocale(appId, lang, storefront))
+  );
+  return results.flat();
 }
 
-// ─── DB upsert (배치) ─────────────────────────────────────────────────────────
+// ─── Android: 로케일별 수집 ───────────────────────────────────────────────────
+async function fetchAndroidLocale(
+  packageName: string,
+  lang: string,
+  country: string
+): Promise<ScrapedReview[]> {
+  try {
+    const result = await gplayScraper.reviews({
+      appId: packageName,
+      lang,
+      country,
+      sort: gplayScraper.sort.NEWEST,
+      num: PER_LOCALE,
+    });
+    const items = (result.data ?? result) as { score: number; text: string; version: string; date: string }[];
+    return items.slice(0, PER_LOCALE).map((r) => ({
+      app_id: packageName,
+      platform: "android" as Platform,
+      lang,
+      version: r.version ?? null,
+      rating: r.score,
+      content: r.text ?? "",
+      review_date: new Date(r.date).toISOString(),
+    }));
+  } catch {
+    console.warn(`[fetch] android locale ${lang}-${country} failed, skipping`);
+    return [];
+  }
+}
+
+async function fetchAndroidReviews(packageName: string): Promise<ScrapedReview[]> {
+  const results = await Promise.all(
+    ANDROID_LOCALES.map(({ lang, country }) => fetchAndroidLocale(packageName, lang, country))
+  );
+  return results.flat();
+}
+
+// ─── DB upsert ────────────────────────────────────────────────────────────────
 async function upsertReviews(
   reviews: ScrapedReview[]
 ): Promise<{ inserted: number; skipped: number }> {
@@ -91,7 +130,7 @@ async function upsertReviews(
   const { data, error } = await supabase
     .from("reviews")
     .upsert(rows, {
-      onConflict: "app_id,platform,content,review_date",
+      onConflict: "app_id,platform,content,review_date,lang",
       ignoreDuplicates: true,
     })
     .select("id");
@@ -99,15 +138,14 @@ async function upsertReviews(
   if (error) throw new Error(`Supabase upsert error: ${error.message}`);
 
   const inserted = data?.length ?? 0;
-  const skipped = reviews.length - inserted;
-  return { inserted, skipped };
+  return { inserted, skipped: reviews.length - inserted };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as FetchReviewsRequest;
-    const { app_id, platform, count = 100 } = body;
+    const { app_id, platform } = body;
 
     if (!app_id || !platform) {
       return NextResponse.json({ error: "app_id and platform are required" }, { status: 400 });
@@ -115,15 +153,21 @@ export async function POST(req: NextRequest) {
 
     const scraped =
       platform === "ios"
-        ? await fetchIosReviews(app_id, count)
-        : await fetchAndroidReviews(app_id, count);
+        ? await fetchIosReviews(app_id)
+        : await fetchAndroidReviews(app_id);
 
-    // content가 비어있는 리뷰 제거 (별점만 남긴 리뷰)
     const valid = scraped.filter((r) => r.content.trim().length > 0);
+
+    const langBreakdown = valid.reduce<Record<string, number>>((acc, r) => {
+      acc[r.lang] = (acc[r.lang] ?? 0) + 1;
+      return acc;
+    }, {});
 
     const { inserted, skipped } = await upsertReviews(valid);
 
-    console.log(`[fetch] ${platform} ${app_id} — scraped: ${scraped.length}, inserted: ${inserted}, skipped: ${skipped}`);
+    console.log(
+      `[fetch] ${platform} ${app_id} — total: ${valid.length}, inserted: ${inserted}, skipped: ${skipped} | langs: ${JSON.stringify(langBreakdown)}`
+    );
 
     return NextResponse.json({ inserted, skipped } satisfies FetchReviewsResponse);
   } catch (e) {

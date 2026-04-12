@@ -165,7 +165,7 @@ export default function HomePage() {
             3. 분석 시작
           </p>
           <p className="text-xs text-zinc-400 mb-3">
-            최근 리뷰 최대 100건을 수집하여 분석합니다.
+            영어·한국어·일본어·독일어 최근 리뷰를 수집하여 분석합니다. (로케일당 최대 40건)
           </p>
           <Button
             size="lg"
