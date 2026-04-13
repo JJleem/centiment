@@ -4,19 +4,17 @@ import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown } from "lucide-react";
-import type { Sentiment, ReviewCategory } from "@/types";
+import { ChevronDown, Smartphone, Play } from "lucide-react";
+import type { Sentiment, ReviewCategory, Platform } from "@/types";
 
 const PAGE_SIZE = 20;
 
-interface ReviewItem {
+export interface CombinedItem {
   content: string;
   rating: number;
   version: string | null;
   review_date: string;
-}
-
-interface AnalysisItem {
+  platform: Platform;
   sentiment: Sentiment;
   category: ReviewCategory;
   keywords: string[];
@@ -49,54 +47,82 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-interface Props {
-  reviews: ReviewItem[];
-  analyses: AnalysisItem[];
+function PlatformBadge({ platform }: { platform: Platform }) {
+  const isIos = platform === "ios";
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+      isIos ? "bg-sky-50 text-sky-600" : "bg-teal-50 text-teal-600"
+    }`}>
+      {isIos ? <Smartphone size={9} /> : <Play size={9} />}
+      {isIos ? "iOS" : "Android"}
+    </span>
+  );
 }
 
-export default function ReviewList({ reviews, analyses }: Props) {
+interface Props {
+  items: CombinedItem[];
+}
+
+export default function ReviewList({ items }: Props) {
+  const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<Sentiment | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<ReviewCategory | "all">("all");
   const [shown, setShown] = useState(PAGE_SIZE);
 
-  // 리뷰 + 분석 페어링 후 필터 적용
   const filtered = useMemo(() => {
-    return reviews
-      .map((review, i) => ({ review, analysis: analyses[i] }))
-      .filter(({ analysis }) => {
-        if (!analysis) return false;
-        if (sentimentFilter !== "all" && analysis.sentiment !== sentimentFilter) return false;
-        if (categoryFilter !== "all" && analysis.category !== categoryFilter) return false;
-        return true;
-      });
-  }, [reviews, analyses, sentimentFilter, categoryFilter]);
+    return items.filter((item) => {
+      if (platformFilter !== "all" && item.platform !== platformFilter) return false;
+      if (sentimentFilter !== "all" && item.sentiment !== sentimentFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      return true;
+    });
+  }, [items, platformFilter, sentimentFilter, categoryFilter]);
 
-  // 필터 변경 시 페이지 리셋
-  function handleSentiment(val: Sentiment | "all") {
-    setSentimentFilter(val);
-    setShown(PAGE_SIZE);
-  }
-  function handleCategory(val: ReviewCategory | "all") {
-    setCategoryFilter(val);
-    setShown(PAGE_SIZE);
-  }
+  function resetPage() { setShown(PAGE_SIZE); }
 
   const visible = filtered.slice(0, shown);
   const hasMore = shown < filtered.length;
 
   return (
     <div className="space-y-4">
+      {/* 플랫폼 필터 */}
+      <div className="flex gap-2">
+        {(["all", "ios", "android"] as const).map((p) => {
+          const active = platformFilter === p;
+          const label = p === "all" ? "전체" : p === "ios" ? "iOS" : "Android";
+          const Icon = p === "ios" ? Smartphone : p === "android" ? Play : null;
+          return (
+            <button
+              key={p}
+              onClick={() => { setPlatformFilter(p); resetPage(); }}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
+                active
+                  ? p === "ios"
+                    ? "bg-sky-500 text-white border-sky-500"
+                    : p === "android"
+                    ? "bg-teal-500 text-white border-teal-500"
+                    : "bg-zinc-800 text-white border-zinc-800"
+                  : "text-zinc-500 border-zinc-200 hover:border-zinc-400"
+              }`}
+            >
+              {Icon && <Icon size={10} />}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* 감성 필터 */}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => handleSentiment("all")}
+          onClick={() => { setSentimentFilter("all"); resetPage(); }}
           className={`px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
             sentimentFilter === "all"
               ? "bg-zinc-800 text-white border-zinc-800"
               : "text-zinc-500 border-zinc-200 hover:border-zinc-400"
           }`}
         >
-          전체
+          전체 감성
         </button>
         {SENTIMENTS.map((s) => {
           const cfg = SENTIMENT_CONFIG[s];
@@ -104,7 +130,7 @@ export default function ReviewList({ reviews, analyses }: Props) {
           return (
             <button
               key={s}
-              onClick={() => handleSentiment(s)}
+              onClick={() => { setSentimentFilter(s); resetPage(); }}
               className={`px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
                 active ? cfg.active : `${cfg.color} border-zinc-200 hover:border-zinc-400`
               }`}
@@ -118,7 +144,7 @@ export default function ReviewList({ reviews, analyses }: Props) {
       {/* 카테고리 필터 */}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => handleCategory("all")}
+          onClick={() => { setCategoryFilter("all"); resetPage(); }}
           className={`px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
             categoryFilter === "all"
               ? "bg-indigo-500 text-white border-indigo-500"
@@ -127,29 +153,26 @@ export default function ReviewList({ reviews, analyses }: Props) {
         >
           전체 카테고리
         </button>
-        {CATEGORIES.map((c) => {
-          const active = categoryFilter === c;
-          return (
-            <button
-              key={c}
-              onClick={() => handleCategory(c)}
-              className={`px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
-                active
-                  ? "bg-indigo-500 text-white border-indigo-500"
-                  : "text-zinc-500 border-zinc-200 hover:border-zinc-400"
-              }`}
-            >
-              {CATEGORY_LABEL[c]}
-            </button>
-          );
-        })}
+        {CATEGORIES.map((c) => (
+          <button
+            key={c}
+            onClick={() => { setCategoryFilter(c); resetPage(); }}
+            className={`px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
+              categoryFilter === c
+                ? "bg-indigo-500 text-white border-indigo-500"
+                : "text-zinc-500 border-zinc-200 hover:border-zinc-400"
+            }`}
+          >
+            {CATEGORY_LABEL[c]}
+          </button>
+        ))}
       </div>
 
       {/* 결과 카운트 */}
       <p className="text-xs text-zinc-400">
-        {sentimentFilter === "all" && categoryFilter === "all"
+        {filtered.length === items.length
           ? `총 ${filtered.length}건`
-          : `필터 결과 ${filtered.length}건 / 전체 ${reviews.length}건`}
+          : `필터 결과 ${filtered.length}건 / 전체 ${items.length}건`}
       </p>
 
       {/* 리뷰 카드 */}
@@ -159,44 +182,39 @@ export default function ReviewList({ reviews, analyses }: Props) {
         </div>
       ) : (
         <>
-          {visible.map(({ review, analysis }, i) => {
-            const sentCfg = analysis ? SENTIMENT_CONFIG[analysis.sentiment] : null;
+          {visible.map((item, i) => {
+            const sentCfg = SENTIMENT_CONFIG[item.sentiment];
             return (
               <Card key={i} className="border-zinc-100">
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2">
-                      <StarRating rating={review.rating} />
+                      <PlatformBadge platform={item.platform} />
+                      <StarRating rating={item.rating} />
                       <span className="text-[10px] text-zinc-300">
-                        {new Date(review.review_date).toLocaleDateString("ko-KR", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
+                        {new Date(item.review_date).toLocaleDateString("ko-KR", {
+                          year: "numeric", month: "short", day: "numeric",
                         })}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {analysis && (
-                        <>
-                          <Badge variant="outline" className={`text-[10px] ${sentCfg?.color}`}>
-                            {sentCfg?.label}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px]">
-                            {CATEGORY_LABEL[analysis.category]}
-                          </Badge>
-                        </>
-                      )}
-                      {review.version && (
-                        <span className="text-[10px] text-zinc-300">v{review.version}</span>
+                      <Badge variant="outline" className={`text-[10px] ${sentCfg.color}`}>
+                        {sentCfg.label}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {CATEGORY_LABEL[item.category]}
+                      </Badge>
+                      {item.version && (
+                        <span className="text-[10px] text-zinc-300">v{item.version}</span>
                       )}
                     </div>
                   </div>
                   <p className="text-sm text-zinc-700 leading-relaxed line-clamp-3">
-                    {review.content}
+                    {item.content}
                   </p>
-                  {analysis?.keywords?.length > 0 && (
+                  {item.keywords?.length > 0 && (
                     <div className="flex gap-1 mt-2">
-                      {analysis.keywords.map((kw) => (
+                      {item.keywords.map((kw) => (
                         <span key={kw} className="text-[10px] text-zinc-400">#{kw}</span>
                       ))}
                     </div>

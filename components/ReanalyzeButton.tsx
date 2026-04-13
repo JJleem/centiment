@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RefreshCw, Loader2 } from "lucide-react";
-import type { Platform } from "@/types";
+import type { GamePreset } from "@/lib/presets";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
 
@@ -26,11 +26,10 @@ const STEP_PROGRESS: Record<Step, number> = {
 };
 
 interface Props {
-  app_id: string;
-  platform: Platform;
+  game: GamePreset;
 }
 
-export default function ReanalyzeButton({ app_id, platform }: Props) {
+export default function ReanalyzeButton({ game }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -42,26 +41,52 @@ export default function ReanalyzeButton({ app_id, platform }: Props) {
     setErrorMsg("");
 
     try {
-      const fetchRes = await fetch("/api/reviews/fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_id, platform, count: 100 }),
-      });
-      if (!fetchRes.ok) {
-        const err = await fetchRes.json().catch(() => ({}));
-        throw new Error(err.error ?? "리뷰 수집 실패");
+      // iOS + Android 동시 수집
+      const [iosFetch, androidFetch] = await Promise.all([
+        fetch("/api/reviews/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: game.ios_app_id, platform: "ios", count: 100 }),
+        }),
+        fetch("/api/reviews/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: game.android_package, platform: "android", count: 100 }),
+        }),
+      ]);
+
+      if (!iosFetch.ok) {
+        const err = await iosFetch.json().catch(() => ({}));
+        throw new Error(`iOS 수집 실패: ${err.error ?? iosFetch.statusText}`);
+      }
+      if (!androidFetch.ok) {
+        const err = await androidFetch.json().catch(() => ({}));
+        throw new Error(`Android 수집 실패: ${err.error ?? androidFetch.statusText}`);
       }
 
       setStep("analyzing");
 
-      const analyzeRes = await fetch("/api/reviews/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_id, platform }),
-      });
-      if (!analyzeRes.ok) {
-        const err = await analyzeRes.json().catch(() => ({}));
-        throw new Error(err.error ?? "분석 실패");
+      // iOS + Android 동시 분석
+      const [iosAnalyze, androidAnalyze] = await Promise.all([
+        fetch("/api/reviews/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: game.ios_app_id, platform: "ios" }),
+        }),
+        fetch("/api/reviews/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: game.android_package, platform: "android" }),
+        }),
+      ]);
+
+      if (!iosAnalyze.ok) {
+        const err = await iosAnalyze.json().catch(() => ({}));
+        throw new Error(`iOS 분석 실패: ${err.error ?? iosAnalyze.statusText}`);
+      }
+      if (!androidAnalyze.ok) {
+        const err = await androidAnalyze.json().catch(() => ({}));
+        throw new Error(`Android 분석 실패: ${err.error ?? androidAnalyze.statusText}`);
       }
 
       setStep("done");

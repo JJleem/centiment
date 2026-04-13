@@ -6,38 +6,31 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, Smartphone, Play, BarChart3, ChevronRight } from "lucide-react";
+import { Loader2, BarChart3, ChevronRight } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
-import type { Platform } from "@/types";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
 
-const PLATFORM_OPTIONS: { value: Platform; label: string; icon: React.ReactNode }[] = [
-  { value: "ios", label: "iOS", icon: <Smartphone size={14} /> },
-  { value: "android", label: "Android", icon: <Play size={14} /> },
-];
-
 const STEP_PROGRESS: Record<Step, number> = {
-  idle: 0,
-  fetching: 30,
+  idle:      0,
+  fetching:  30,
   analyzing: 70,
-  done: 100,
-  error: 0,
+  done:      100,
+  error:     0,
 };
 
 const STEP_LABEL: Record<Step, string> = {
-  idle: "",
-  fetching: "리뷰 수집 중...",
+  idle:      "",
+  fetching:  "iOS · Android 리뷰 수집 중...",
   analyzing: "Claude AI 분석 중...",
-  done: "완료!",
-  error: "오류가 발생했습니다.",
+  done:      "완료!",
+  error:     "오류가 발생했습니다.",
 };
 
 export default function HomePage() {
   const router = useRouter();
   const [selectedGame, setSelectedGame] = useState<GamePreset | null>(null);
-  const [platform, setPlatform] = useState<Platform>("ios");
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -49,37 +42,56 @@ export default function HomePage() {
     setErrorMsg("");
 
     try {
-      const appId =
-        platform === "ios"
-          ? selectedGame.ios_app_id
-          : selectedGame.android_package;
+      // iOS + Android 동시 수집
+      const [iosFetch, androidFetch] = await Promise.all([
+        fetch("/api/reviews/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: selectedGame.ios_app_id, platform: "ios", count: 100 }),
+        }),
+        fetch("/api/reviews/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android", count: 100 }),
+        }),
+      ]);
 
-      // 1. Fetch reviews
-      const fetchRes = await fetch("/api/reviews/fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_id: appId, platform, count: 100 }),
-      });
-      if (!fetchRes.ok) {
-        const body = await fetchRes.json().catch(() => ({}));
-        throw new Error(`[리뷰 수집 실패] ${body.error ?? fetchRes.statusText}`);
+      if (!iosFetch.ok) {
+        const body = await iosFetch.json().catch(() => ({}));
+        throw new Error(`[iOS 수집 실패] ${body.error ?? iosFetch.statusText}`);
+      }
+      if (!androidFetch.ok) {
+        const body = await androidFetch.json().catch(() => ({}));
+        throw new Error(`[Android 수집 실패] ${body.error ?? androidFetch.statusText}`);
       }
 
-      // 2. Analyze
+      // iOS + Android 동시 분석
       setStep("analyzing");
-      const analyzeRes = await fetch("/api/reviews/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app_id: appId, platform }),
-      });
-      if (!analyzeRes.ok) {
-        const body = await analyzeRes.json().catch(() => ({}));
-        throw new Error(`[Claude 분석 실패] ${body.error ?? analyzeRes.statusText}`);
+      const [iosAnalyze, androidAnalyze] = await Promise.all([
+        fetch("/api/reviews/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: selectedGame.ios_app_id, platform: "ios" }),
+        }),
+        fetch("/api/reviews/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android" }),
+        }),
+      ]);
+
+      if (!iosAnalyze.ok) {
+        const body = await iosAnalyze.json().catch(() => ({}));
+        throw new Error(`[iOS 분석 실패] ${body.error ?? iosAnalyze.statusText}`);
+      }
+      if (!androidAnalyze.ok) {
+        const body = await androidAnalyze.json().catch(() => ({}));
+        throw new Error(`[Android 분석 실패] ${body.error ?? androidAnalyze.statusText}`);
       }
 
       setStep("done");
       setTimeout(() => {
-        router.push(`/result?app_id=${appId}&platform=${platform}`);
+        router.push(`/result?game=${selectedGame.id}`);
       }, 600);
     } catch (e) {
       setStep("error");
@@ -101,7 +113,7 @@ export default function HomePage() {
       </div>
 
       <div className="w-full max-w-2xl space-y-6">
-        {/* Step 1 — Game select */}
+        {/* 게임 선택 */}
         <section>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
             1. 게임 선택
@@ -137,36 +149,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Step 2 — Platform select */}
+        {/* 분석 시작 */}
         <section>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            2. 플랫폼 선택
-          </p>
-          <div className="flex gap-2">
-            {PLATFORM_OPTIONS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => !isRunning && setPlatform(p.value)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                  platform === p.value
-                    ? "bg-indigo-500 text-white border-indigo-500"
-                    : "bg-white text-zinc-600 border-zinc-200 hover:border-indigo-300"
-                }`}
-              >
-                {p.icon}
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Step 3 — Run */}
-        <section>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            3. 분석 시작
+            2. 분석 시작
           </p>
           <p className="text-xs text-zinc-400 mb-3">
-            영어·한국어·일본어·독일어 최근 리뷰를 수집하여 분석합니다. (로케일당 최대 40건)
+            iOS · Android 양쪽 리뷰를 동시에 수집하여 플랫폼 비교 분석합니다.
           </p>
           <Button
             size="lg"
@@ -181,13 +170,12 @@ export default function HomePage() {
               </>
             ) : (
               <>
-                분석 시작
+                iOS · Android 동시 분석
                 <ChevronRight size={16} className="ml-1" />
               </>
             )}
           </Button>
 
-          {/* Progress */}
           {step !== "idle" && step !== "error" && (
             <div className="mt-4 space-y-1.5">
               <Progress value={STEP_PROGRESS[step]} className="h-1.5" />
@@ -195,7 +183,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Error */}
           {step === "error" && (
             <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 space-y-2">
               <p className="text-xs font-semibold text-rose-600">오류가 발생했습니다</p>
