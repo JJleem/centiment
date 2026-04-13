@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, BarChart3, ChevronRight } from "lucide-react";
+import { Loader2, BarChart3, ChevronRight, AlertTriangle } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
 
@@ -28,9 +28,15 @@ const STEP_LABEL: Record<Step, string> = {
   error:     "오류가 발생했습니다.",
 };
 
+const COUNT_OPTIONS = [
+  { value: 100, label: "최근 100건" },
+  { value: 200, label: "최근 200건" },
+] as const;
+
 export default function HomePage() {
   const router = useRouter();
   const [selectedGame, setSelectedGame] = useState<GamePreset | null>(null);
+  const [reviewCount, setReviewCount] = useState<100 | 200>(100);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -47,12 +53,12 @@ export default function HomePage() {
         fetch("/api/reviews/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_id: selectedGame.ios_app_id, platform: "ios", count: 100 }),
+          body: JSON.stringify({ app_id: selectedGame.ios_app_id, platform: "ios", count: reviewCount }),
         }),
         fetch("/api/reviews/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android", count: 100 }),
+          body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android", count: reviewCount }),
         }),
       ]);
 
@@ -149,10 +155,38 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* 수집 건수 */}
+        <section>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+            2. 수집 건수
+          </p>
+          <div className="flex gap-2">
+            {COUNT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => !isRunning && setReviewCount(opt.value)}
+                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                  reviewCount === opt.value
+                    ? "bg-indigo-500 text-white border-indigo-500"
+                    : "bg-white text-zinc-600 border-zinc-200 hover:border-indigo-300"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {reviewCount === 200 && (
+            <div className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600">
+              <AlertTriangle size={12} />
+              건수가 많을수록 분석 시간이 길어질 수 있습니다.
+            </div>
+          )}
+        </section>
+
         {/* 분석 시작 */}
         <section>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            2. 분석 시작
+            3. 분석 시작
           </p>
           <p className="text-xs text-zinc-400 mb-3">
             iOS · Android 양쪽 리뷰를 동시에 수집하여 플랫폼 비교 분석합니다.
