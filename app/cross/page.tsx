@@ -13,6 +13,7 @@ import {
   BarChart2,
 } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
+import GameIcon from "@/components/GameIcon";
 import type { Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ function SentimentColumn({ stats, color }: { stats: GameStats; color: GameColor 
   return (
     <div className={`rounded-xl border p-4 space-y-3 ${c.bg}`}>
       <div className={`flex items-center gap-2 text-sm font-semibold ${c.text}`}>
-        <span className="text-xl">{stats.game.emoji}</span>
+        <GameIcon game={stats.game} size={24} />
         {stats.game.name}
         <span className="ml-auto text-xs font-normal text-zinc-400">{stats.total}건</span>
       </div>
@@ -207,12 +208,12 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
           <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors">
             <ArrowLeft size={20} />
           </Link>
-          <span className="text-2xl">{game1.emoji}</span>
+          <GameIcon game={game1} size={32} />
           <h1 className="text-xl font-bold">{game1.name}</h1>
           <Badge variant="secondary" className="flex items-center gap-1 text-xs">
             <GitCompare size={11} /> vs
           </Badge>
-          <span className="text-2xl">{game2.emoji}</span>
+          <GameIcon game={game2} size={32} />
           <h1 className="text-xl font-bold">{game2.name}</h1>
           <div className="ml-auto flex gap-2 text-xs text-zinc-400">
             <Link href={`/result?game=${g1}`} className="hover:text-indigo-500 transition-colors">{game1.name} 상세 →</Link>
@@ -239,7 +240,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
             </div>
             {winner && diff > 0 && (
               <p className="text-xs text-center text-emerald-600">
-                <span className="font-semibold">{winner.emoji} {winner.name}</span>이 긍정률 {diff}%p 더 높음
+                <span className="font-semibold">{winner.name}</span>이 긍정률 {diff}%p 더 높음
               </p>
             )}
           </CardContent>
@@ -254,11 +255,11 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
             <div className="flex items-center gap-4 text-xs text-zinc-400">
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />
-                {game1.emoji} {game1.name}
+                {game1.name}
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-violet-400 inline-block" />
-                {game2.emoji} {game2.name}
+                {game2.name}
               </span>
             </div>
             {ALL_CATEGORIES.map((cat) => {
@@ -296,7 +297,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <p className="text-xs font-semibold text-indigo-600 mb-2">{game1.emoji} {game1.name}</p>
+                <p className="text-xs font-semibold text-indigo-600 mb-2">{game1.name}</p>
                 {stats1 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {stats1.topKeywords.map((kw) => (
@@ -312,7 +313,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
                 ) : <p className="text-xs text-zinc-300">데이터 없음</p>}
               </div>
               <div>
-                <p className="text-xs font-semibold text-violet-600 mb-2">{game2.emoji} {game2.name}</p>
+                <p className="text-xs font-semibold text-violet-600 mb-2">{game2.name}</p>
                 {stats2 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {stats2.topKeywords.map((kw) => (

@@ -39,6 +39,27 @@ interface MZReview {
   rating: number;
 }
 
+// ─── DB 최신 날짜 조회 ────────────────────────────────────────────────────────
+async function getLatestDatesByLang(
+  appId: string,
+  platform: Platform
+): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("lang, review_date")
+    .eq("app_id", appId)
+    .eq("platform", platform)
+    .order("review_date", { ascending: false });
+
+  if (error || !data) return {};
+
+  // lang별 최신 날짜만 (order desc이므로 첫 번째 등장이 최신)
+  return data.reduce<Record<string, string>>((acc, row) => {
+    if (!acc[row.lang]) acc[row.lang] = row.review_date;
+    return acc;
+  }, {});
+}
+
 // ─── iOS: 로케일별 수집 ───────────────────────────────────────────────────────
 async function fetchMZStorePage(
   appId: string,
@@ -60,26 +81,34 @@ async function fetchMZStorePage(
 async function fetchIosLocale(
   appId: string,
   lang: string,
-  storefront: string
+  storefront: string,
+  after?: string
 ): Promise<ScrapedReview[]> {
   const pages = Math.ceil(PER_LOCALE / 20);
   const results = await Promise.all(
     Array.from({ length: pages }, (_, i) => fetchMZStorePage(appId, storefront, i * 20))
   );
-  return results.flat().slice(0, PER_LOCALE).map((r) => ({
-    app_id: appId,
-    platform: "ios" as Platform,
-    lang,
-    version: null,
-    rating: r.rating,
-    content: r.body,
-    review_date: new Date(r.date).toISOString(),
-  }));
+  const cutoff = after ? new Date(after) : null;
+  return results.flat()
+    .slice(0, PER_LOCALE)
+    .filter((r) => !cutoff || new Date(r.date) > cutoff)
+    .map((r) => ({
+      app_id: appId,
+      platform: "ios" as Platform,
+      lang,
+      version: null,
+      rating: r.rating,
+      content: r.body,
+      review_date: new Date(r.date).toISOString(),
+    }));
 }
 
 async function fetchIosReviews(appId: string): Promise<ScrapedReview[]> {
+  const latestDates = await getLatestDatesByLang(appId, "ios");
   const results = await Promise.all(
-    IOS_STOREFRONTS.map(({ lang, storefront }) => fetchIosLocale(appId, lang, storefront))
+    IOS_STOREFRONTS.map(({ lang, storefront }) =>
+      fetchIosLocale(appId, lang, storefront, latestDates[lang])
+    )
   );
   return results.flat();
 }
@@ -88,7 +117,8 @@ async function fetchIosReviews(appId: string): Promise<ScrapedReview[]> {
 async function fetchAndroidLocale(
   packageName: string,
   lang: string,
-  country: string
+  country: string,
+  after?: string
 ): Promise<ScrapedReview[]> {
   try {
     const result = await gplayScraper.reviews({
@@ -99,15 +129,19 @@ async function fetchAndroidLocale(
       num: PER_LOCALE,
     });
     const items = (result.data ?? result) as { score: number; text: string; version: string; date: string }[];
-    return items.slice(0, PER_LOCALE).map((r) => ({
-      app_id: packageName,
-      platform: "android" as Platform,
-      lang,
-      version: r.version ?? null,
-      rating: r.score,
-      content: r.text ?? "",
-      review_date: new Date(r.date).toISOString(),
-    }));
+    const cutoff = after ? new Date(after) : null;
+    return items
+      .slice(0, PER_LOCALE)
+      .filter((r) => !cutoff || new Date(r.date) > cutoff)
+      .map((r) => ({
+        app_id: packageName,
+        platform: "android" as Platform,
+        lang,
+        version: r.version ?? null,
+        rating: r.score,
+        content: r.text ?? "",
+        review_date: new Date(r.date).toISOString(),
+      }));
   } catch {
     console.warn(`[fetch] android locale ${lang}-${country} failed, skipping`);
     return [];
@@ -115,8 +149,11 @@ async function fetchAndroidLocale(
 }
 
 async function fetchAndroidReviews(packageName: string): Promise<ScrapedReview[]> {
+  const latestDates = await getLatestDatesByLang(packageName, "android");
   const results = await Promise.all(
-    ANDROID_LOCALES.map(({ lang, country }) => fetchAndroidLocale(packageName, lang, country))
+    ANDROID_LOCALES.map(({ lang, country }) =>
+      fetchAndroidLocale(packageName, lang, country, latestDates[lang])
+    )
   );
   return results.flat();
 }
@@ -166,7 +203,7 @@ export async function POST(req: NextRequest) {
     const { inserted, skipped } = await upsertReviews(valid);
 
     console.log(
-      `[fetch] ${platform} ${app_id} — total: ${valid.length}, inserted: ${inserted}, skipped: ${skipped} | langs: ${JSON.stringify(langBreakdown)}`
+      `[fetch] ${platform} ${app_id} — scraped: ${scraped.length}, after-cutoff: ${valid.length}, inserted: ${inserted}, skipped: ${skipped} | langs: ${JSON.stringify(langBreakdown)}`
     );
 
     return NextResponse.json({ inserted, skipped } satisfies FetchReviewsResponse);

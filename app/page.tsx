@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, BarChart3, ChevronRight, AlertTriangle, GitCompare } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
+import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
@@ -140,16 +141,22 @@ export default function HomePage() {
                       : "border-transparent hover:border-zinc-300"
                   }`}
                 >
-                  <CardHeader className="pb-2 pt-4 px-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">{game.emoji}</span>
-                      <Badge variant="secondary" className="text-[10px]">
+                  <CardHeader className="pb-3 pt-4 px-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <GameIcon game={game} size={48} />
+                      <Badge variant="secondary" className="text-[10px] mt-0.5">
                         {game.genre}
                       </Badge>
                     </div>
                     <CardTitle className="text-sm mt-2">{game.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {game.downloads} 다운로드
+                    <CardDescription className="text-xs space-y-0.5">
+                      <span className="flex items-center gap-1">
+                        <span className="text-amber-400">★</span>
+                        <span>{game.store_rating.toFixed(1)}</span>
+                        <span className="text-zinc-300">·</span>
+                        <span>{(game.rating_count / 10000).toFixed(0)}만+</span>
+                      </span>
+                      <span className="block">{game.downloads} 다운로드</span>
                     </CardDescription>
                   </CardHeader>
                 </Card>
@@ -255,7 +262,7 @@ export default function HomePage() {
                         : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
                     }`}
                   >
-                    <span className="text-base">{game.emoji}</span>
+                    <GameIcon game={game} size={28} />
                     <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
                   </button>
                 ))}
@@ -275,7 +282,7 @@ export default function HomePage() {
                         : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
                     }`}
                   >
-                    <span className="text-base">{game.emoji}</span>
+                    <GameIcon game={game} size={28} />
                     <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
                   </button>
                 ))}
@@ -288,7 +295,7 @@ export default function HomePage() {
               className="mt-3 flex items-center justify-center gap-2 w-full py-2 rounded-lg border border-zinc-200 bg-white text-sm text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 transition-all"
             >
               <GitCompare size={14} />
-              {crossG1.emoji} {crossG1.name} vs {crossG2.emoji} {crossG2.name} 비교하기
+              {crossG1.name} vs {crossG2.name} 비교하기
             </Link>
           ) : (
             <p className="mt-2 text-[10px] text-zinc-300 text-center">

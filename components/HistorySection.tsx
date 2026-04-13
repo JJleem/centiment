@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, ChevronRight, Smartphone, Play } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
+import GameIcon from "@/components/GameIcon";
 import type { HistoryItem } from "@/app/api/history/route";
 
 function SentimentMiniBar({ positive, negative, neutral, total }: {
@@ -87,7 +88,7 @@ export default function HistorySection() {
               <CardContent className="py-3 px-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-lg shrink-0">{game.emoji}</span>
+                    <GameIcon game={game} size={28} className="shrink-0" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className="text-sm font-medium truncate">{game.name}</span>

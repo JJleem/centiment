@@ -15,6 +15,7 @@ import {
   Bug,
 } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
+import GameIcon from "@/components/GameIcon";
 import ReviewList, { type CombinedItem } from "@/components/ReviewList";
 import ReanalyzeButton from "@/components/ReanalyzeButton";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
@@ -302,7 +303,7 @@ async function Dashboard({ game_id }: { game_id: string }) {
             <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            <span className="text-2xl">{game.emoji}</span>
+            <GameIcon game={game} size={32} />
             <h1 className="text-xl font-bold">{game.name}</h1>
           </div>
           <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-3">
@@ -342,7 +343,7 @@ async function Dashboard({ game_id }: { game_id: string }) {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{game.emoji}</span>
+                <GameIcon game={game} size={32} />
                 <h1 className="text-xl font-bold">{game.name}</h1>
                 <Badge variant="secondary" className="flex items-center gap-1 text-xs">
                   <Smartphone size={10} /> iOS
