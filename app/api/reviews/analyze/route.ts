@@ -34,7 +34,7 @@ async function classifyBatch(
 ): Promise<ClassifyResult[]> {
   const res = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [{ role: "user", content: buildClassifyPrompt(batch) }],
   });
 
@@ -49,9 +49,12 @@ async function classifyBatch(
   try {
     const parsed = JSON.parse(text) as ClassifyResult[];
     if (parsed.length !== batch.length) {
-      console.warn(`[analyze][haiku] count mismatch: expected ${batch.length}, got ${parsed.length}`);
+      console.warn(`[analyze][haiku] count mismatch: expected ${batch.length}, got ${parsed.length} — padding with defaults`);
+      while (parsed.length < batch.length) {
+        parsed.push({ sentiment: "neutral", category: "other", keywords: [] });
+      }
     }
-    return parsed;
+    return parsed.slice(0, batch.length);
   } catch {
     console.error("[analyze][haiku] JSON parse failed:", text.slice(0, 300));
     return batch.map(() => ({ sentiment: "neutral", category: "other", keywords: [] }));
