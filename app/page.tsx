@@ -1,58 +1,135 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Loader2, BarChart3, ChevronRight, AlertTriangle, GitCompare } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
 import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
+import {
+  Search, BarChart3, ChevronRight, AlertTriangle,
+  Loader2, GitCompare, Check,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
 
-const STEP_PROGRESS: Record<Step, number> = {
-  idle:      0,
-  fetching:  30,
-  analyzing: 70,
-  done:      100,
-  error:     0,
-};
+const GENRES = ["전체", "타이쿤", "캐주얼", "RPG", "레이싱"] as const;
 
-const STEP_LABEL: Record<Step, string> = {
-  idle:      "",
-  fetching:  "iOS · Android 리뷰 수집 중...",
-  analyzing: "Claude AI 분석 중...",
-  done:      "완료!",
-  error:     "오류가 발생했습니다.",
-};
+function formatCount(n: number): string {
+  if (n >= 10000) return `${Math.floor(n / 10000)}만+`;
+  if (n >= 1000) return `${Math.floor(n / 1000)}천+`;
+  return String(n);
+}
 
-const COUNT_OPTIONS = [
-  { value: 100, label: "최근 100건" },
-  { value: 200, label: "최근 200건" },
-] as const;
+// ─── Cross comparison dropdown ─────────────────────────────────────────────────
+function GameSelectDropdown({
+  label, selected, onSelect, exclude, color,
+}: {
+  label: string;
+  selected: GamePreset | null;
+  onSelect: (g: GamePreset) => void;
+  exclude?: string;
+  color: "indigo" | "violet";
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = SUPERCENT_GAMES.filter(
+    (g) => g.id !== exclude && g.name.toLowerCase().includes(q.toLowerCase())
+  );
+  const ring =
+    color === "indigo"
+      ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+      : "border-violet-400 bg-violet-50 text-violet-700";
 
+  return (
+    <div className="relative">
+      <p className="text-[10px] text-zinc-400 mb-1.5">{label}</p>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all ${
+          selected ? ring : "border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300"
+        }`}
+      >
+        {selected ? (
+          <>
+            <GameIcon game={selected} size={26} />
+            <span className="text-xs font-medium truncate">{selected.name}</span>
+          </>
+        ) : (
+          <span className="text-xs">게임 선택...</span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 top-full mt-1 w-full min-w-[200px] bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="p-2 border-b border-zinc-100">
+              <input
+                autoFocus
+                type="text"
+                placeholder="검색..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-300"
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <p className="text-center py-4 text-xs text-zinc-400">검색 결과 없음</p>
+              ) : (
+                filtered.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => { onSelect(g); setOpen(false); setQ(""); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-zinc-50 transition-colors"
+                  >
+                    <GameIcon game={g} size={24} />
+                    <span className="text-xs truncate flex-1 text-left">{g.name}</span>
+                    <span className="text-[10px] text-zinc-400 shrink-0">★ {g.store_rating.toFixed(1)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter();
   const [selectedGame, setSelectedGame] = useState<GamePreset | null>(null);
   const [reviewCount, setReviewCount] = useState<100 | 200>(100);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [search, setSearch] = useState("");
+  const [genreFilter, setGenreFilter] = useState<string>("전체");
   const [crossG1, setCrossG1] = useState<GamePreset | null>(null);
   const [crossG2, setCrossG2] = useState<GamePreset | null>(null);
 
   const isRunning = step === "fetching" || step === "analyzing";
 
+  const filteredGames = useMemo(
+    () =>
+      SUPERCENT_GAMES.filter((g) => {
+        const matchSearch = g.name.toLowerCase().includes(search.toLowerCase());
+        const matchGenre = genreFilter === "전체" || g.genre === genreFilter;
+        return matchSearch && matchGenre;
+      }),
+    [search, genreFilter]
+  );
+
   async function handleStart() {
     if (!selectedGame) return;
     setStep("fetching");
     setErrorMsg("");
-
     try {
-      // iOS + Android 동시 수집
       const [iosFetch, androidFetch] = await Promise.all([
         fetch("/api/reviews/fetch", {
           method: "POST",
@@ -65,17 +142,15 @@ export default function HomePage() {
           body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android", count: reviewCount }),
         }),
       ]);
-
       if (!iosFetch.ok) {
-        const body = await iosFetch.json().catch(() => ({}));
-        throw new Error(`[iOS 수집 실패] ${body.error ?? iosFetch.statusText}`);
+        const b = await iosFetch.json().catch(() => ({}));
+        throw new Error(`[iOS 수집 실패] ${b.error ?? iosFetch.statusText}`);
       }
       if (!androidFetch.ok) {
-        const body = await androidFetch.json().catch(() => ({}));
-        throw new Error(`[Android 수집 실패] ${body.error ?? androidFetch.statusText}`);
+        const b = await androidFetch.json().catch(() => ({}));
+        throw new Error(`[Android 수집 실패] ${b.error ?? androidFetch.statusText}`);
       }
 
-      // iOS + Android 동시 분석
       setStep("analyzing");
       const [iosAnalyze, androidAnalyze] = await Promise.all([
         fetch("/api/reviews/analyze", {
@@ -89,20 +164,17 @@ export default function HomePage() {
           body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android" }),
         }),
       ]);
-
       if (!iosAnalyze.ok) {
-        const body = await iosAnalyze.json().catch(() => ({}));
-        throw new Error(`[iOS 분석 실패] ${body.error ?? iosAnalyze.statusText}`);
+        const b = await iosAnalyze.json().catch(() => ({}));
+        throw new Error(`[iOS 분석 실패] ${b.error ?? iosAnalyze.statusText}`);
       }
       if (!androidAnalyze.ok) {
-        const body = await androidAnalyze.json().catch(() => ({}));
-        throw new Error(`[Android 분석 실패] ${body.error ?? androidAnalyze.statusText}`);
+        const b = await androidAnalyze.json().catch(() => ({}));
+        throw new Error(`[Android 분석 실패] ${b.error ?? androidAnalyze.statusText}`);
       }
 
       setStep("done");
-      setTimeout(() => {
-        router.push(`/result?game=${selectedGame.id}`);
-      }, 600);
+      setTimeout(() => router.push(`/result?game=${selectedGame.id}`), 500);
     } catch (e) {
       setStep("error");
       setErrorMsg(e instanceof Error ? e.message : "알 수 없는 오류");
@@ -110,200 +182,223 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center px-4 py-16">
-      {/* Header */}
-      <div className="mb-10 text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <BarChart3 className="text-indigo-500" size={28} />
-          <h1 className="text-3xl font-bold tracking-tight">Centiment</h1>
-        </div>
-        <p className="text-zinc-500 text-sm">
-          Supercent 게임 리뷰 감성 분석 대시보드
-        </p>
-      </div>
+    <main className="min-h-screen bg-zinc-50">
+      {/* Sticky header */}
+      <header className="sticky top-0 z-10 bg-white border-b border-zinc-100 px-5 py-3.5 flex items-center gap-3">
+        <BarChart3 className="text-indigo-500 shrink-0" size={20} />
+        <span className="font-bold text-base tracking-tight">Centiment</span>
+        <span className="hidden sm:block text-zinc-200 text-sm">|</span>
+        <span className="hidden sm:block text-zinc-400 text-sm">Supercent 게임 리뷰 감성 분석</span>
+      </header>
 
-      <div className="w-full max-w-2xl space-y-6">
-        {/* 게임 선택 */}
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-10">
+
+        {/* ── 게임 선택 ─────────────────────────────────────────────────────── */}
         <section>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            1. 게임 선택
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+            게임 선택 <span className="normal-case font-normal text-zinc-300 ml-1">({SUPERCENT_GAMES.length}개)</span>
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {SUPERCENT_GAMES.map((game) => {
-              const active = selectedGame?.id === game.id;
-              return (
-                <Card
-                  key={game.id}
-                  onClick={() => !isRunning && setSelectedGame(game)}
-                  className={`cursor-pointer transition-all border-2 ${
-                    active
-                      ? "border-indigo-500 shadow-md"
-                      : "border-transparent hover:border-zinc-300"
+
+          {/* 검색 + 장르 필터 */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <div className="relative flex-1 max-w-xs">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="게임 이름 검색..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 transition-shadow"
+              />
+            </div>
+            <div className="flex gap-1.5 flex-wrap items-center">
+              {GENRES.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGenreFilter(g)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    genreFilter === g
+                      ? "bg-indigo-500 text-white shadow-sm"
+                      : "bg-white border border-zinc-200 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
                   }`}
                 >
-                  <CardHeader className="pb-3 pt-4 px-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <GameIcon game={game} size={48} />
-                      <Badge variant="secondary" className="text-[10px] mt-0.5">
-                        {game.genre}
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-sm mt-2">{game.name}</CardTitle>
-                    <CardDescription className="text-xs space-y-0.5">
-                      <span className="flex items-center gap-1">
-                        <span className="text-amber-400">★</span>
-                        <span>{game.store_rating.toFixed(1)}</span>
-                        <span className="text-zinc-300">·</span>
-                        <span>{(game.rating_count / 10000).toFixed(0)}만+</span>
-                      </span>
-                      <span className="block">{game.downloads} 다운로드</span>
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 게임 그리드 */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {filteredGames.map((game) => {
+              const active = selectedGame?.id === game.id;
+              return (
+                <button
+                  key={game.id}
+                  onClick={() => !isRunning && setSelectedGame(active ? null : game)}
+                  className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                    active
+                      ? "border-indigo-500 bg-indigo-50 shadow-sm ring-1 ring-indigo-200"
+                      : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm"
+                  }`}
+                >
+                  <GameIcon game={game} size={38} className="shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-zinc-800 leading-tight line-clamp-2">{game.name}</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 flex items-center gap-1">
+                      <span className="text-amber-400">★</span>
+                      <span>{game.store_rating.toFixed(1)}</span>
+                      <span className="text-zinc-300">·</span>
+                      <span>{game.genre}</span>
+                    </p>
+                  </div>
+                  {active && (
+                    <span className="absolute top-2 right-2 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm">
+                      <Check size={9} className="text-white" />
+                    </span>
+                  )}
+                </button>
               );
             })}
-          </div>
-        </section>
-
-        {/* 수집 건수 */}
-        <section>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            2. 수집 건수
-          </p>
-          <div className="flex gap-2">
-            {COUNT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => !isRunning && setReviewCount(opt.value)}
-                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                  reviewCount === opt.value
-                    ? "bg-indigo-500 text-white border-indigo-500"
-                    : "bg-white text-zinc-600 border-zinc-200 hover:border-indigo-300"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {reviewCount === 200 && (
-            <div className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600">
-              <AlertTriangle size={12} />
-              건수가 많을수록 분석 시간이 길어질 수 있습니다.
-            </div>
-          )}
-        </section>
-
-        {/* 분석 시작 */}
-        <section>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-            3. 분석 시작
-          </p>
-          <p className="text-xs text-zinc-400 mb-3">
-            iOS · Android 양쪽 리뷰를 동시에 수집하여 플랫폼 비교 분석합니다.
-          </p>
-          <Button
-            size="lg"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white"
-            disabled={!selectedGame || isRunning}
-            onClick={handleStart}
-          >
-            {isRunning ? (
-              <>
-                <Loader2 size={16} className="animate-spin mr-2" />
-                {STEP_LABEL[step]}
-              </>
-            ) : (
-              <>
-                iOS · Android 동시 분석
-                <ChevronRight size={16} className="ml-1" />
-              </>
+            {filteredGames.length === 0 && (
+              <p className="col-span-full text-center py-12 text-sm text-zinc-400">
+                검색 결과가 없습니다
+              </p>
             )}
-          </Button>
-
-          {step !== "idle" && step !== "error" && (
-            <div className="mt-4 space-y-1.5">
-              <Progress value={STEP_PROGRESS[step]} className="h-1.5" />
-              <p className="text-xs text-zinc-400 text-right">{STEP_LABEL[step]}</p>
-            </div>
-          )}
-
-          {step === "error" && (
-            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 space-y-2">
-              <p className="text-xs font-semibold text-rose-600">오류가 발생했습니다</p>
-              <p className="text-xs text-rose-500 break-all">{errorMsg}</p>
-              <button
-                onClick={() => setStep("idle")}
-                className="text-xs text-rose-400 underline underline-offset-2 hover:text-rose-600"
-              >
-                닫고 다시 시도
-              </button>
-            </div>
-          )}
+          </div>
         </section>
 
-        {/* 게임 간 비교 */}
-        <section>
-          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <GitCompare size={12} />
-            게임 간 비교
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {/* G1 */}
-            <div className="space-y-2">
-              <p className="text-[10px] text-zinc-400">첫 번째 게임</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {SUPERCENT_GAMES.map((game) => (
-                  <button
-                    key={game.id}
-                    onClick={() => setCrossG1(game)}
-                    className={`flex flex-col items-center py-2 px-1 rounded-lg border text-xs transition-all ${
-                      crossG1?.id === game.id
-                        ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                        : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
-                    }`}
-                  >
-                    <GameIcon game={game} size={28} />
-                    <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
-                  </button>
-                ))}
+        {/* ── 분석 액션 (게임 선택 시 표시) ──────────────────────────────────── */}
+        {selectedGame && (
+          <section className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-5 shadow-sm">
+            {/* 선택된 게임 정보 */}
+            <div className="flex items-center gap-4">
+              <GameIcon game={selectedGame} size={56} />
+              <div>
+                <p className="font-bold text-base">{selectedGame.name}</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <Badge variant="secondary" className="text-[10px]">{selectedGame.genre}</Badge>
+                  <span className="text-xs text-zinc-400">
+                    <span className="text-amber-400">★</span> {selectedGame.store_rating.toFixed(1)}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    {formatCount(selectedGame.rating_count)} 평가
+                  </span>
+                  <span className="text-xs text-zinc-400">{selectedGame.downloads} 다운로드</span>
+                </div>
               </div>
             </div>
-            {/* G2 */}
-            <div className="space-y-2">
-              <p className="text-[10px] text-zinc-400">두 번째 게임</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {SUPERCENT_GAMES.map((game) => (
+
+            {/* 수집 건수 */}
+            <div>
+              <p className="text-xs text-zinc-500 mb-2">수집 건수</p>
+              <div className="flex gap-2 items-center">
+                {([100, 200] as const).map((n) => (
                   <button
-                    key={game.id}
-                    onClick={() => setCrossG2(game)}
-                    className={`flex flex-col items-center py-2 px-1 rounded-lg border text-xs transition-all ${
-                      crossG2?.id === game.id
-                        ? "border-violet-400 bg-violet-50 text-violet-700"
-                        : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
+                    key={n}
+                    onClick={() => !isRunning && setReviewCount(n)}
+                    className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                      reviewCount === n
+                        ? "bg-indigo-500 text-white border-indigo-500 shadow-sm"
+                        : "bg-zinc-50 text-zinc-600 border-zinc-200 hover:border-indigo-300"
                     }`}
                   >
-                    <GameIcon game={game} size={28} />
-                    <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
+                    최근 {n}건
                   </button>
                 ))}
+                {reviewCount === 200 && (
+                  <span className="flex items-center gap-1 text-[11px] text-amber-500 ml-1">
+                    <AlertTriangle size={11} /> 분석 시간이 늘어납니다
+                  </span>
+                )}
               </div>
             </div>
-          </div>
-          {crossG1 && crossG2 && crossG1.id !== crossG2.id ? (
-            <Link
-              href={`/cross?g1=${crossG1.id}&g2=${crossG2.id}`}
-              className="mt-3 flex items-center justify-center gap-2 w-full py-2 rounded-lg border border-zinc-200 bg-white text-sm text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 transition-all"
+
+            {/* 분석 버튼 */}
+            <Button
+              size="lg"
+              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold"
+              disabled={isRunning}
+              onClick={handleStart}
             >
-              <GitCompare size={14} />
-              {crossG1.name} vs {crossG2.name} 비교하기
-            </Link>
-          ) : (
-            <p className="mt-2 text-[10px] text-zinc-300 text-center">
-              {crossG1 && crossG2 && crossG1.id === crossG2.id
-                ? "서로 다른 게임을 선택해 주세요"
-                : "두 게임을 선택하면 비교 대시보드로 이동합니다"}
-            </p>
-          )}
+              {isRunning ? (
+                <>
+                  <Loader2 size={15} className="animate-spin mr-2" />
+                  {step === "fetching" ? "iOS · Android 리뷰 수집 중..." : "Claude AI 분석 중..."}
+                </>
+              ) : (
+                <>
+                  iOS · Android 동시 분석
+                  <ChevronRight size={16} className="ml-1" />
+                </>
+              )}
+            </Button>
+
+            {step !== "idle" && step !== "error" && (
+              <div className="space-y-1">
+                <Progress
+                  value={step === "fetching" ? 30 : step === "analyzing" ? 70 : 100}
+                  className="h-1.5"
+                />
+                <p className="text-[11px] text-zinc-400 text-right">
+                  {step === "fetching" ? "리뷰 수집 중..." : step === "analyzing" ? "AI 분석 중..." : "완료!"}
+                </p>
+              </div>
+            )}
+
+            {step === "error" && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 space-y-1.5">
+                <p className="text-xs font-semibold text-rose-600">오류가 발생했습니다</p>
+                <p className="text-xs text-rose-500 break-all">{errorMsg}</p>
+                <button
+                  onClick={() => setStep("idle")}
+                  className="text-xs text-rose-400 underline underline-offset-2 hover:text-rose-600"
+                >
+                  닫고 다시 시도
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── 게임 간 비교 ──────────────────────────────────────────────────── */}
+        <section>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+            <GitCompare size={12} /> 게임 간 비교
+          </p>
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <GameSelectDropdown
+                label="첫 번째 게임"
+                selected={crossG1}
+                onSelect={setCrossG1}
+                exclude={crossG2?.id}
+                color="indigo"
+              />
+              <GameSelectDropdown
+                label="두 번째 게임"
+                selected={crossG2}
+                onSelect={setCrossG2}
+                exclude={crossG1?.id}
+                color="violet"
+              />
+            </div>
+            {crossG1 && crossG2 && crossG1.id !== crossG2.id ? (
+              <Link
+                href={`/cross?g1=${crossG1.id}&g2=${crossG2.id}`}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-200 text-sm text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+              >
+                <GitCompare size={14} />
+                {crossG1.name} vs {crossG2.name} 비교하기
+              </Link>
+            ) : (
+              <p className="text-[11px] text-zinc-300 text-center pb-1">
+                {crossG1 && crossG2 && crossG1.id === crossG2.id
+                  ? "서로 다른 게임을 선택해 주세요"
+                  : "두 게임을 선택하면 비교 대시보드로 이동합니다"}
+              </p>
+            )}
+          </div>
         </section>
 
         <HistorySection />
