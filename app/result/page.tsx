@@ -3,7 +3,6 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft,
   Smartphone,
@@ -11,13 +10,14 @@ import {
   TrendingUp,
   AlertCircle,
   Minus,
-  Tag,
   MessageSquare,
   BarChart2,
 } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import ReviewList, { type CombinedItem } from "@/components/ReviewList";
 import ReanalyzeButton from "@/components/ReanalyzeButton";
+import KeywordDrilldown from "@/components/KeywordDrilldown";
+import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
 import type { Platform, Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ interface PlatformStats {
   sortedCategories: [string, number][];
   topKeywords: string[];
   summary: string;
+  versionTrend: VersionTrendData[];
   reviewItems: CombinedItem[];
 }
 
@@ -99,6 +100,29 @@ async function getPlatformStats(
     .slice(0, 15)
     .map(([kw]) => kw);
 
+  // 버전별 감성 트렌드
+  const parseVer = (v: string) => v.split(".").map((n) => parseInt(n, 10) || 0);
+  const versionMap: Record<string, { positive: number; negative: number; neutral: number }> = {};
+  for (const r of rows) {
+    const ver = r.version ?? "미상";
+    if (!versionMap[ver]) versionMap[ver] = { positive: 0, negative: 0, neutral: 0 };
+    versionMap[ver][r.sentiment]++;
+  }
+  const versionTrend: VersionTrendData[] = Object.entries(versionMap)
+    .sort(([a], [b]) => {
+      const av = parseVer(a), bv = parseVer(b);
+      for (let i = 0; i < Math.max(av.length, bv.length); i++) {
+        const diff = (av[i] ?? 0) - (bv[i] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return a.localeCompare(b);
+    })
+    .map(([version, counts]) => ({
+      version,
+      ...counts,
+      total: counts.positive + counts.negative + counts.neutral,
+    }));
+
   // 리뷰 + 분석 페어링 (index 기준)
   const reviewItems: CombinedItem[] = rows.map((analysis, i) => ({
     content: reviewRows[i]?.content ?? "",
@@ -117,6 +141,7 @@ async function getPlatformStats(
     sortedCategories,
     topKeywords,
     summary: rows[0].summary,
+    versionTrend,
     reviewItems,
   };
 }
@@ -389,60 +414,43 @@ async function Dashboard({ game_id }: { game_id: string }) {
           </CardContent>
         </Card>
 
-        {/* 키워드 비교 */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              <Tag size={13} /> 주요 키워드 비교
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-2">
-                  <Smartphone size={11} /> iOS
-                </p>
-                {ios ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {ios.topKeywords.map((kw) => (
-                      <Badge key={kw} variant="secondary" className="text-xs font-normal bg-sky-50 text-sky-700 border-sky-100">
-                        {kw}
-                      </Badge>
-                    ))}
+        {/* 버전별 감성 트렌드 */}
+        {(ios?.versionTrend.length ?? 0) >= 2 || (android?.versionTrend.length ?? 0) >= 2 ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <TrendingUp size={13} /> 버전별 감성 트렌드
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {ios && ios.versionTrend.length >= 2 && (
+                  <div>
+                    <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
+                      <Smartphone size={11} /> iOS
+                    </p>
+                    <VersionTrendChart data={ios.versionTrend} />
                   </div>
-                ) : (
-                  <p className="text-xs text-zinc-300">데이터 없음</p>
+                )}
+                {android && android.versionTrend.length >= 2 && (
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
+                      <Play size={11} /> Android
+                    </p>
+                    <VersionTrendChart data={android.versionTrend} />
+                  </div>
                 )}
               </div>
-              <div>
-                <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-2">
-                  <Play size={11} /> Android
-                </p>
-                {android ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {android.topKeywords.map((kw) => (
-                      <Badge key={kw} variant="secondary" className="text-xs font-normal bg-teal-50 text-teal-700 border-teal-100">
-                        {kw}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-300">데이터 없음</p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : null}
 
-        <Separator />
-
-        {/* 통합 리뷰 목록 */}
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-            전체 리뷰 ({allReviewItems.length}건)
-          </h2>
-          <ReviewList items={allReviewItems} />
-        </div>
+        {/* 키워드 비교 + 리뷰 드릴다운 (클라이언트 컴포넌트) */}
+        <KeywordDrilldown
+          iosKeywords={ios?.topKeywords ?? []}
+          androidKeywords={android?.topKeywords ?? []}
+          allItems={allReviewItems}
+        />
 
       </div>
     </main>
