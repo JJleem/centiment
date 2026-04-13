@@ -237,7 +237,9 @@ function CategoryComparison({
     (cat) => (iosMap[cat] ?? 0) > 0 || (androidMap[cat] ?? 0) > 0
   );
 
-  if (!hasData) return null;
+  if (!hasData) return (
+    <p className="text-xs text-zinc-300 text-center py-6">카테고리 데이터가 없습니다.</p>
+  );
 
   return (
     <div className="space-y-4">
@@ -369,9 +371,11 @@ async function Dashboard({ game_id }: { game_id: string }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {ios
+              {ios?.summary
                 ? <p className="text-xs text-zinc-700 leading-relaxed">{ios.summary}</p>
-                : <p className="text-xs text-zinc-300">데이터 없음</p>
+                : <p className="text-xs text-zinc-300 italic">
+                    {ios ? "요약 생성 중이거나 데이터가 부족합니다." : "데이터 없음"}
+                  </p>
               }
             </CardContent>
           </Card>
@@ -383,9 +387,11 @@ async function Dashboard({ game_id }: { game_id: string }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {android
+              {android?.summary
                 ? <p className="text-xs text-zinc-700 leading-relaxed">{android.summary}</p>
-                : <p className="text-xs text-zinc-300">데이터 없음</p>
+                : <p className="text-xs text-zinc-300 italic">
+                    {android ? "요약 생성 중이거나 데이터가 부족합니다." : "데이터 없음"}
+                  </p>
               }
             </CardContent>
           </Card>
@@ -451,12 +457,16 @@ async function Dashboard({ game_id }: { game_id: string }) {
             <CardTitle className="text-sm">카테고리별 비교</CardTitle>
           </CardHeader>
           <CardContent>
-            <CategoryComparison ios={ios} android={android} />
+            {ios || android ? (
+              <CategoryComparison ios={ios} android={android} />
+            ) : (
+              <p className="text-xs text-zinc-300 text-center py-6">카테고리 데이터가 없습니다.</p>
+            )}
           </CardContent>
         </Card>
 
         {/* 버전별 감성 트렌드 */}
-        {(ios?.versionTrend.length ?? 0) >= 2 || (android?.versionTrend.length ?? 0) >= 2 ? (
+        {(ios || android) && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-1.5">
@@ -465,26 +475,64 @@ async function Dashboard({ game_id }: { game_id: string }) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {ios && ios.versionTrend.length >= 2 && (
+                {/* iOS */}
+                {ios ? (
                   <div>
                     <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
                       <Smartphone size={11} /> iOS
                     </p>
-                    <VersionTrendChart data={ios.versionTrend} />
+                    {ios.versionTrend.length >= 2 ? (
+                      <VersionTrendChart data={ios.versionTrend} />
+                    ) : (
+                      <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
+                        버전 데이터가 부족합니다
+                        <span className="block text-zinc-300 text-[11px] mt-1">
+                          트렌드 표시에는 최소 2개 버전이 필요합니다
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
+                      <Smartphone size={11} /> iOS
+                    </p>
+                    <p className="text-xs text-zinc-300 text-center py-6 border border-dashed border-zinc-100 rounded-lg">
+                      분석 데이터 없음
+                    </p>
                   </div>
                 )}
-                {android && android.versionTrend.length >= 2 && (
+                {/* Android */}
+                {android ? (
                   <div>
                     <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
                       <Play size={11} /> Android
                     </p>
-                    <VersionTrendChart data={android.versionTrend} />
+                    {android.versionTrend.length >= 2 ? (
+                      <VersionTrendChart data={android.versionTrend} />
+                    ) : (
+                      <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
+                        버전 데이터가 부족합니다
+                        <span className="block text-zinc-300 text-[11px] mt-1">
+                          트렌드 표시에는 최소 2개 버전이 필요합니다
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
+                      <Play size={11} /> Android
+                    </p>
+                    <p className="text-xs text-zinc-300 text-center py-6 border border-dashed border-zinc-100 rounded-lg">
+                      분석 데이터 없음
+                    </p>
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
-        ) : null}
+        )}
 
         {/* 키워드 비교 + 리뷰 드릴다운 (클라이언트 컴포넌트) */}
         <KeywordDrilldown

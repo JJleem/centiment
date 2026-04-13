@@ -48,27 +48,31 @@ export default function KeywordDrilldown({ iosKeywords, androidKeywords, allItem
               <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-2">
                 <Smartphone size={11} /> iOS
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {iosKeywords.map((kw) => {
-                  const active = activeKeyword === kw;
-                  return (
-                    <button key={kw} onClick={() => toggle(kw)}>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs font-normal cursor-pointer transition-all select-none ${
-                          active
-                            ? "bg-indigo-500 text-white border-indigo-500 scale-105"
-                            : sharedKeywords.has(kw)
-                            ? "bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-200 font-medium"
-                            : "bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100"
-                        }`}
-                      >
-                        {kw}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
+                {iosKeywords.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {iosKeywords.map((kw) => {
+                    const active = activeKeyword === kw;
+                    return (
+                      <button key={kw} onClick={() => toggle(kw)}>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs font-normal cursor-pointer transition-all select-none ${
+                            active
+                              ? "bg-indigo-500 text-white border-indigo-500 scale-105"
+                              : sharedKeywords.has(kw)
+                              ? "bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-200 font-medium"
+                              : "bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100"
+                          }`}
+                        >
+                          {kw}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-300 py-2">키워드 데이터 없음</p>
+              )}
             </div>
 
             {/* Android */}
@@ -76,27 +80,31 @@ export default function KeywordDrilldown({ iosKeywords, androidKeywords, allItem
               <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-2">
                 <Play size={11} /> Android
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {androidKeywords.map((kw) => {
-                  const active = activeKeyword === kw;
-                  return (
-                    <button key={kw} onClick={() => toggle(kw)}>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs font-normal cursor-pointer transition-all select-none ${
-                          active
-                            ? "bg-indigo-500 text-white border-indigo-500 scale-105"
-                            : sharedKeywords.has(kw)
-                            ? "bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 font-medium"
-                            : "bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100"
-                        }`}
-                      >
-                        {kw}
-                      </Badge>
-                    </button>
-                  );
-                })}
-              </div>
+                {androidKeywords.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {androidKeywords.map((kw) => {
+                    const active = activeKeyword === kw;
+                    return (
+                      <button key={kw} onClick={() => toggle(kw)}>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs font-normal cursor-pointer transition-all select-none ${
+                            active
+                              ? "bg-indigo-500 text-white border-indigo-500 scale-105"
+                              : sharedKeywords.has(kw)
+                              ? "bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-200 font-medium"
+                              : "bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100"
+                          }`}
+                        >
+                          {kw}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-300 py-2">키워드 데이터 없음</p>
+              )}
             </div>
           </div>
 
