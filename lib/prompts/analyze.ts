@@ -32,9 +32,9 @@ Reviews:
 ${items}`;
 }
 
-// ─── Sonnet: 전체 요약 ────────────────────────────────────────────────────────
-// Input : 분류 결과 집계 통계 + 상위 키워드
-// Output: 3~5문장 인사이트 요약 (한국어)
+// ─── Sonnet: 요약 + 이슈 목록 ─────────────────────────────────────────────────
+// Input : 분류 결과 집계 통계 + 버그 카테고리 리뷰 원문 (최대 20건)
+// Output: JSON { summary: string, issues: string[] }
 export function buildSummaryPrompt(stats: {
   total: number;
   positive: number;
@@ -42,7 +42,14 @@ export function buildSummaryPrompt(stats: {
   neutral: number;
   topKeywords: string[];
   categoryCounts: Record<string, number>;
+  bugContents: string[];   // 버그 카테고리 리뷰 원문
 }): string {
+  const bugSection = stats.bugContents.length > 0
+    ? `\nBug/crash reports (${stats.bugContents.length} reviews):\n${
+        stats.bugContents.map((c, i) => `[${i + 1}] ${c.slice(0, 200)}`).join("\n")
+      }`
+    : "\nBug/crash reports: none";
+
   return `You are a game product manager writing an internal insight report in Korean.
 
 Review analysis results:
@@ -52,10 +59,17 @@ Review analysis results:
 - Neutral: ${stats.neutral} (${Math.round((stats.neutral / stats.total) * 100)}%)
 - Top keywords: ${stats.topKeywords.slice(0, 10).join(", ")}
 - Category breakdown: ${JSON.stringify(stats.categoryCounts)}
+${bugSection}
 
-Write exactly 3 sentences in Korean for the game team. No more, no less.
-Sentence 1: overall sentiment and what players love.
-Sentence 2: main complaint with specific evidence from keywords.
-Sentence 3: one concrete improvement suggestion.
-Output plain text only, no markdown, no headers, no bullet points.`;
+Return ONLY a JSON object (no markdown, no explanation):
+{
+  "summary": "<3 sentences in Korean: (1) overall sentiment & what players love, (2) main complaint with specific evidence, (3) one concrete improvement suggestion>",
+  "issues": ["<specific bug or issue in Korean, max 15 chars>", ...]
+}
+
+Rules for issues:
+- Extract distinct, concrete issues from the bug reports (e.g. "광고 스킵 불가", "결제 후 아이템 미지급")
+- If no bug reports, return an empty array []
+- Max 8 issues, each under 20 characters in Korean
+- Do NOT include vague issues like "버그 있음"`;
 }

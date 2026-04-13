@@ -12,6 +12,7 @@ import {
   Minus,
   MessageSquare,
   BarChart2,
+  Bug,
 } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import ReviewList, { type CombinedItem } from "@/components/ReviewList";
@@ -28,6 +29,7 @@ interface AnalysisRow {
   category: ReviewCategory;
   keywords: string[];
   summary: string;
+  issues: string[];
 }
 
 interface ReviewRow {
@@ -43,6 +45,7 @@ interface PlatformStats {
   sortedCategories: [string, number][];
   topKeywords: string[];
   summary: string;
+  issues: string[];
   versionTrend: VersionTrendData[];
   reviewItems: CombinedItem[];
 }
@@ -64,7 +67,7 @@ async function getPlatformStats(
   const [{ data: analyses, error }, { data: reviews }] = await Promise.all([
     supabase
       .from("review_analysis")
-      .select("platform, version, sentiment, category, keywords, summary")
+      .select("platform, version, sentiment, category, keywords, summary, issues")
       .eq("app_id", app_id)
       .eq("platform", platform)
       .order("created_at", { ascending: false }),
@@ -141,6 +144,7 @@ async function getPlatformStats(
     sortedCategories,
     topKeywords,
     summary: rows[0].summary,
+    issues: rows[0].issues ?? [],
     versionTrend,
     reviewItems,
   };
@@ -385,6 +389,42 @@ async function Dashboard({ game_id }: { game_id: string }) {
             </CardContent>
           </Card>
         </div>
+
+        {/* 이슈 목록 — iOS / Android 각각 버그가 있을 때만 */}
+        {((ios?.issues?.length ?? 0) > 0 || (android?.issues?.length ?? 0) > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { stats: ios, platform: "ios" as const },
+              { stats: android, platform: "android" as const },
+            ].map(({ stats, platform }) => {
+              if (!stats || stats.issues.length === 0) return null;
+              const isIos = platform === "ios";
+              return (
+                <Card key={platform} className={isIos ? "border-rose-100 bg-rose-50/40" : "border-orange-100 bg-orange-50/40"}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className={`text-xs flex items-center gap-1.5 ${isIos ? "text-rose-600" : "text-orange-600"}`}>
+                      <Bug size={12} />
+                      {isIos ? <Smartphone size={12} /> : <Play size={12} />}
+                      {isIos ? "iOS" : "Android"} 주요 이슈
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1.5">
+                      {stats.issues.map((issue, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs text-zinc-700">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isIos ? "bg-rose-100 text-rose-600" : "bg-orange-100 text-orange-600"}`}>
+                            {i + 1}
+                          </span>
+                          {issue}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
 
         {/* 감성 비교 */}
         <Card>

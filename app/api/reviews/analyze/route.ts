@@ -58,11 +58,17 @@ async function classifyBatch(
   }
 }
 
-// ─── Sonnet: 전체 요약 ────────────────────────────────────────────────────────
+// ─── Sonnet: 요약 + 이슈 목록 ─────────────────────────────────────────────────
+interface SummaryResult {
+  summary: string;
+  issues: string[];
+}
+
 async function summarize(
   classified: ClassifyResult[],
+  bugContents: string[],
   usage: UsageAcc
-): Promise<string> {
+): Promise<SummaryResult> {
   const total = classified.length;
   const positive = classified.filter((r) => r.sentiment === "positive").length;
   const negative = classified.filter((r) => r.sentiment === "negative").length;
@@ -87,7 +93,11 @@ async function summarize(
     messages: [
       {
         role: "user",
-        content: buildSummaryPrompt({ total, positive, negative, neutral, topKeywords, categoryCounts }),
+        content: buildSummaryPrompt({
+          total, positive, negative, neutral,
+          topKeywords, categoryCounts,
+          bugContents: bugContents.slice(0, 20),
+        }),
       },
     ],
   });
@@ -98,7 +108,18 @@ async function summarize(
   usage.sonnet.input_tokens += res.usage.input_tokens;
   usage.sonnet.output_tokens += res.usage.output_tokens;
 
-  return res.content[0].type === "text" ? res.content[0].text.trim() : "";
+  const raw = res.content[0].type === "text" ? res.content[0].text : "{}";
+  const text = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+  try {
+    const parsed = JSON.parse(text) as SummaryResult;
+    return {
+      summary: parsed.summary ?? "",
+      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+    };
+  } catch {
+    console.error("[analyze][sonnet] JSON parse failed:", text.slice(0, 300));
+    return { summary: text, issues: [] };
+  }
 }
 
 // ─── ReviewRow ────────────────────────────────────────────────────────────────
@@ -154,7 +175,12 @@ export async function POST(req: NextRequest) {
         allClassified.push(...await classifyBatch(payloads, usage));
       }
 
-      const summary = await summarize(allClassified, usage);
+      // 버그 카테고리 원문 수집 (in-memory, 추가 DB 쿼리 없음)
+      const bugContents = rows
+        .filter((_, i) => allClassified[i]?.category === "bug")
+        .map((r) => r.content);
+
+      const { summary, issues } = await summarize(allClassified, bugContents, usage);
 
       const records = rows.map((row, i) => ({
         app_id: row.app_id,
@@ -164,6 +190,7 @@ export async function POST(req: NextRequest) {
         category: allClassified[i].category,
         keywords: allClassified[i].keywords,
         summary,
+        issues,
         review_id: row.id,
       }));
       const { error: insertErr } = await supabase.from("review_analysis").insert(records);
@@ -174,7 +201,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 증분 모드 (기본) ──────────────────────────────────────────────────────
-    // 이미 분석된 review_id 수집
     const { data: existingAnalyses } = await supabase
       .from("review_analysis")
       .select("review_id")
@@ -184,7 +210,6 @@ export async function POST(req: NextRequest) {
 
     const analyzedIds = new Set((existingAnalyses ?? []).map((r) => r.review_id as string));
 
-    // 전체 리뷰 조회
     const { data: allReviews, error: fetchErr } = await supabase
       .from("reviews")
       .select("id, app_id, platform, version, content, rating")
@@ -197,8 +222,6 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = allReviews as ReviewRow[];
-
-    // 미분석 리뷰만 추출
     const unanalyzed = rows.filter((r) => !analyzedIds.has(r.id));
 
     if (unanalyzed.length === 0) {
@@ -216,7 +239,7 @@ export async function POST(req: NextRequest) {
       newClassified.push(...await classifyBatch(payloads, usage));
     }
 
-    // 신규 분석 결과 INSERT
+    // 신규 분석 INSERT (summary/issues는 임시 빈값, 아래에서 UPDATE)
     const newRecords = unanalyzed.map((row, i) => ({
       app_id: row.app_id,
       platform: row.platform,
@@ -224,13 +247,14 @@ export async function POST(req: NextRequest) {
       sentiment: newClassified[i].sentiment,
       category: newClassified[i].category,
       keywords: newClassified[i].keywords,
-      summary: "",        // 아래에서 전체 요약 후 UPDATE
+      summary: "",
+      issues: [] as string[],
       review_id: row.id,
     }));
     const { error: insertErr } = await supabase.from("review_analysis").insert(newRecords);
     if (insertErr) throw new Error(insertErr.message);
 
-    // 전체 분석 결과로 Sonnet 요약 재생성
+    // 전체 분석 결과 집계 (Sonnet 요약 + 이슈용)
     const { data: allAnalyses } = await supabase
       .from("review_analysis")
       .select("sentiment, category, keywords")
@@ -238,17 +262,37 @@ export async function POST(req: NextRequest) {
       .eq("platform", platform);
 
     const allClassifiedForSummary = (allAnalyses ?? []) as ClassifyResult[];
-    const summary = await summarize(allClassifiedForSummary, usage);
 
-    // 전체 rows summary 일괄 UPDATE
+    // 버그 카테고리 리뷰 원문 DB에서 수집
+    const { data: bugAnalysisRows } = await supabase
+      .from("review_analysis")
+      .select("review_id")
+      .eq("app_id", app_id)
+      .eq("platform", platform)
+      .eq("category", "bug")
+      .not("review_id", "is", null);
+
+    const bugReviewIds = (bugAnalysisRows ?? []).map((r) => r.review_id as string);
+    let bugContents: string[] = [];
+    if (bugReviewIds.length > 0) {
+      const { data: bugReviews } = await supabase
+        .from("reviews")
+        .select("content")
+        .in("id", bugReviewIds)
+        .limit(20);
+      bugContents = (bugReviews ?? []).map((r) => r.content as string);
+    }
+
+    const { summary, issues } = await summarize(allClassifiedForSummary, bugContents, usage);
+
+    // 전체 rows summary + issues 일괄 UPDATE
     await supabase
       .from("review_analysis")
-      .update({ summary })
+      .update({ summary, issues })
       .eq("app_id", app_id)
       .eq("platform", platform);
 
     console.log(`[analyze][incremental] done — new:${unanalyzed.length} | haiku:${JSON.stringify(usage.haiku)} | sonnet:${JSON.stringify(usage.sonnet)}`);
-
     return NextResponse.json({ analyzed: unanalyzed.length, usage } satisfies AnalyzeReviewsResponse);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
