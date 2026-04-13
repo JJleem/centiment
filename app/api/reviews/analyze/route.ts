@@ -38,7 +38,6 @@ async function classifyBatch(
     messages: [{ role: "user", content: buildClassifyPrompt(batch) }],
   });
 
-  // usage 로그
   console.log(
     `[analyze][haiku] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`
   );
@@ -46,7 +45,6 @@ async function classifyBatch(
   usage.haiku.output_tokens += res.usage.output_tokens;
 
   const raw = res.content[0].type === "text" ? res.content[0].text : "[]";
-  // 마크다운 코드블록 제거
   const text = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
   try {
     const parsed = JSON.parse(text) as ClassifyResult[];
@@ -70,18 +68,14 @@ async function summarize(
   const negative = classified.filter((r) => r.sentiment === "negative").length;
   const neutral = total - positive - negative;
 
-  // 키워드 빈도 집계
   const kwFreq: Record<string, number> = {};
   for (const r of classified) {
-    for (const kw of r.keywords) {
-      kwFreq[kw] = (kwFreq[kw] ?? 0) + 1;
-    }
+    for (const kw of r.keywords) kwFreq[kw] = (kwFreq[kw] ?? 0) + 1;
   }
   const topKeywords = Object.entries(kwFreq)
     .sort((a, b) => b[1] - a[1])
     .map(([kw]) => kw);
 
-  // 카테고리 집계
   const categoryCounts: Record<string, number> = {};
   for (const r of classified) {
     categoryCounts[r.category] = (categoryCounts[r.category] ?? 0) + 1;
@@ -107,7 +101,7 @@ async function summarize(
   return res.content[0].type === "text" ? res.content[0].text.trim() : "";
 }
 
-// ─── DB 저장 ──────────────────────────────────────────────────────────────────
+// ─── ReviewRow ────────────────────────────────────────────────────────────────
 interface ReviewRow {
   id: string;
   app_id: string;
@@ -117,52 +111,14 @@ interface ReviewRow {
   rating: number;
 }
 
-async function saveAnalysis(
-  rows: ReviewRow[],
-  classified: ClassifyResult[],
-  summary: string
-) {
-  const records = rows.map((row, i) => ({
-    app_id: row.app_id,
-    platform: row.platform,
-    version: row.version,
-    sentiment: classified[i].sentiment,
-    category: classified[i].category,
-    keywords: classified[i].keywords,
-    summary,
-  }));
-
-  const { error } = await supabase.from("review_analysis").insert(records);
-  if (error) throw new Error(`Supabase insert error: ${error.message}`);
-}
-
 // ─── Route handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as AnalyzeReviewsRequest;
-    const { app_id, platform } = body;
+    const { app_id, platform, force = false } = body;
 
     if (!app_id || !platform) {
       return NextResponse.json({ error: "app_id and platform are required" }, { status: 400 });
-    }
-
-    // 리뷰 전체 조회
-    const { data: reviews, error: fetchErr } = await supabase
-      .from("reviews")
-      .select("id, app_id, platform, version, content, rating")
-      .eq("app_id", app_id)
-      .eq("platform", platform);
-
-    if (fetchErr) throw new Error(`Supabase fetch error: ${fetchErr.message}`);
-
-    // 기존 분석 결과 삭제 (재분석)
-    await supabase
-      .from("review_analysis")
-      .delete()
-      .eq("app_id", app_id)
-      .eq("platform", platform);
-    if (!reviews || reviews.length === 0) {
-      return NextResponse.json({ analyzed: 0, usage: { haiku: { input_tokens: 0, output_tokens: 0 }, sonnet: { input_tokens: 0, output_tokens: 0 } } } satisfies AnalyzeReviewsResponse);
     }
 
     const usage: UsageAcc = {
@@ -170,31 +126,130 @@ export async function POST(req: NextRequest) {
       sonnet: { input_tokens: 0, output_tokens: 0 },
     };
 
-    // 배치 단위 Haiku 분류
-    const allClassified: ClassifyResult[] = [];
-    for (let i = 0; i < reviews.length; i += BATCH_SIZE) {
-      const batchRows = reviews.slice(i, i + BATCH_SIZE) as ReviewRow[];
-      const payloads: ReviewPayload[] = batchRows.map((r) => ({
-        content: r.content,
-        rating: r.rating,
-        version: r.version,
+    // ── 전체 재분석 모드 (force) ──────────────────────────────────────────────
+    if (force) {
+      const { data: allReviews, error: fetchErr } = await supabase
+        .from("reviews")
+        .select("id, app_id, platform, version, content, rating")
+        .eq("app_id", app_id)
+        .eq("platform", platform);
+
+      if (fetchErr) throw new Error(fetchErr.message);
+
+      await supabase
+        .from("review_analysis")
+        .delete()
+        .eq("app_id", app_id)
+        .eq("platform", platform);
+
+      if (!allReviews || allReviews.length === 0) {
+        return NextResponse.json({ analyzed: 0, usage } satisfies AnalyzeReviewsResponse);
+      }
+
+      const rows = allReviews as ReviewRow[];
+      const allClassified: ClassifyResult[] = [];
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE);
+        const payloads: ReviewPayload[] = batch.map((r) => ({ content: r.content, rating: r.rating, version: r.version }));
+        allClassified.push(...await classifyBatch(payloads, usage));
+      }
+
+      const summary = await summarize(allClassified, usage);
+
+      const records = rows.map((row, i) => ({
+        app_id: row.app_id,
+        platform: row.platform,
+        version: row.version,
+        sentiment: allClassified[i].sentiment,
+        category: allClassified[i].category,
+        keywords: allClassified[i].keywords,
+        summary,
+        review_id: row.id,
       }));
-      const results = await classifyBatch(payloads, usage);
-      allClassified.push(...results);
+      const { error: insertErr } = await supabase.from("review_analysis").insert(records);
+      if (insertErr) throw new Error(insertErr.message);
+
+      console.log(`[analyze][force] done — total:${rows.length} | haiku:${JSON.stringify(usage.haiku)} | sonnet:${JSON.stringify(usage.sonnet)}`);
+      return NextResponse.json({ analyzed: rows.length, usage } satisfies AnalyzeReviewsResponse);
     }
 
-    // Sonnet 요약 (1회)
-    const summary = await summarize(allClassified, usage);
+    // ── 증분 모드 (기본) ──────────────────────────────────────────────────────
+    // 이미 분석된 review_id 수집
+    const { data: existingAnalyses } = await supabase
+      .from("review_analysis")
+      .select("review_id")
+      .eq("app_id", app_id)
+      .eq("platform", platform)
+      .not("review_id", "is", null);
 
-    // DB 저장
-    await saveAnalysis(reviews as ReviewRow[], allClassified, summary);
+    const analyzedIds = new Set((existingAnalyses ?? []).map((r) => r.review_id as string));
 
-    console.log(`[analyze] done — total:${reviews.length} | haiku: ${JSON.stringify(usage.haiku)} | sonnet: ${JSON.stringify(usage.sonnet)}`);
+    // 전체 리뷰 조회
+    const { data: allReviews, error: fetchErr } = await supabase
+      .from("reviews")
+      .select("id, app_id, platform, version, content, rating")
+      .eq("app_id", app_id)
+      .eq("platform", platform);
 
-    return NextResponse.json({
-      analyzed: reviews.length,
-      usage,
-    } satisfies AnalyzeReviewsResponse);
+    if (fetchErr) throw new Error(fetchErr.message);
+    if (!allReviews || allReviews.length === 0) {
+      return NextResponse.json({ analyzed: 0, usage } satisfies AnalyzeReviewsResponse);
+    }
+
+    const rows = allReviews as ReviewRow[];
+
+    // 미분석 리뷰만 추출
+    const unanalyzed = rows.filter((r) => !analyzedIds.has(r.id));
+
+    if (unanalyzed.length === 0) {
+      console.log(`[analyze][incremental] no new reviews — ${app_id}/${platform}`);
+      return NextResponse.json({ analyzed: 0, usage } satisfies AnalyzeReviewsResponse);
+    }
+
+    console.log(`[analyze][incremental] new:${unanalyzed.length} / total:${rows.length} — ${app_id}/${platform}`);
+
+    // 신규 리뷰 배치 분류
+    const newClassified: ClassifyResult[] = [];
+    for (let i = 0; i < unanalyzed.length; i += BATCH_SIZE) {
+      const batch = unanalyzed.slice(i, i + BATCH_SIZE);
+      const payloads: ReviewPayload[] = batch.map((r) => ({ content: r.content, rating: r.rating, version: r.version }));
+      newClassified.push(...await classifyBatch(payloads, usage));
+    }
+
+    // 신규 분석 결과 INSERT
+    const newRecords = unanalyzed.map((row, i) => ({
+      app_id: row.app_id,
+      platform: row.platform,
+      version: row.version,
+      sentiment: newClassified[i].sentiment,
+      category: newClassified[i].category,
+      keywords: newClassified[i].keywords,
+      summary: "",        // 아래에서 전체 요약 후 UPDATE
+      review_id: row.id,
+    }));
+    const { error: insertErr } = await supabase.from("review_analysis").insert(newRecords);
+    if (insertErr) throw new Error(insertErr.message);
+
+    // 전체 분석 결과로 Sonnet 요약 재생성
+    const { data: allAnalyses } = await supabase
+      .from("review_analysis")
+      .select("sentiment, category, keywords")
+      .eq("app_id", app_id)
+      .eq("platform", platform);
+
+    const allClassifiedForSummary = (allAnalyses ?? []) as ClassifyResult[];
+    const summary = await summarize(allClassifiedForSummary, usage);
+
+    // 전체 rows summary 일괄 UPDATE
+    await supabase
+      .from("review_analysis")
+      .update({ summary })
+      .eq("app_id", app_id)
+      .eq("platform", platform);
+
+    console.log(`[analyze][incremental] done — new:${unanalyzed.length} | haiku:${JSON.stringify(usage.haiku)} | sonnet:${JSON.stringify(usage.sonnet)}`);
+
+    return NextResponse.json({ analyzed: unanalyzed.length, usage } satisfies AnalyzeReviewsResponse);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     console.error("[analyze] error:", message);

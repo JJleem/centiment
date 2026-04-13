@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, RotateCcw } from "lucide-react";
 import type { GamePreset } from "@/lib/presets";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
@@ -36,7 +36,7 @@ export default function ReanalyzeButton({ game }: Props) {
 
   const isRunning = step === "fetching" || step === "analyzing";
 
-  async function handleReanalyze() {
+  async function handleReanalyze(force = false) {
     setStep("fetching");
     setErrorMsg("");
 
@@ -71,12 +71,12 @@ export default function ReanalyzeButton({ game }: Props) {
         fetch("/api/reviews/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_id: game.ios_app_id, platform: "ios" }),
+          body: JSON.stringify({ app_id: game.ios_app_id, platform: "ios", force }),
         }),
         fetch("/api/reviews/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_id: game.android_package, platform: "android" }),
+          body: JSON.stringify({ app_id: game.android_package, platform: "android", force }),
         }),
       ]);
 
@@ -101,21 +101,35 @@ export default function ReanalyzeButton({ game }: Props) {
   }
 
   return (
-    <div className="space-y-2">
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={isRunning}
-        onClick={handleReanalyze}
-        className="flex items-center gap-1.5 text-zinc-500"
-      >
-        {isRunning ? (
-          <Loader2 size={13} className="animate-spin" />
-        ) : (
-          <RefreshCw size={13} />
-        )}
-        {isRunning ? STEP_LABEL[step] : "재수집 · 재분석"}
-      </Button>
+    <div className="space-y-2 flex flex-col items-end">
+      <div className="flex items-center gap-2">
+        {/* 전체 재분석 (force) */}
+        <button
+          disabled={isRunning}
+          onClick={() => handleReanalyze(true)}
+          className="text-[11px] text-zinc-400 hover:text-rose-500 transition-colors flex items-center gap-1 disabled:opacity-40"
+          title="기존 분석 결과를 전부 삭제하고 처음부터 재분석합니다"
+        >
+          <RotateCcw size={11} />
+          전체 재분석
+        </button>
+
+        {/* 증분 재분석 (기본) */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isRunning}
+          onClick={() => handleReanalyze(false)}
+          className="flex items-center gap-1.5 text-zinc-500"
+        >
+          {isRunning ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <RefreshCw size={13} />
+          )}
+          {isRunning ? STEP_LABEL[step] : "새 리뷰 분석"}
+        </Button>
+      </div>
 
       {isRunning && (
         <div className="w-48 space-y-1">
@@ -124,7 +138,7 @@ export default function ReanalyzeButton({ game }: Props) {
       )}
 
       {step === "error" && (
-        <p className="text-xs text-rose-500">{errorMsg}</p>
+        <p className="text-xs text-rose-500 max-w-48 text-right">{errorMsg}</p>
       )}
     </div>
   );

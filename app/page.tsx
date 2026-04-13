@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, BarChart3, ChevronRight, AlertTriangle } from "lucide-react";
+import { Loader2, BarChart3, ChevronRight, AlertTriangle, GitCompare } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
+import Link from "next/link";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
 
@@ -39,6 +40,8 @@ export default function HomePage() {
   const [reviewCount, setReviewCount] = useState<100 | 200>(100);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [crossG1, setCrossG1] = useState<GamePreset | null>(null);
+  const [crossG2, setCrossG2] = useState<GamePreset | null>(null);
 
   const isRunning = step === "fetching" || step === "analyzing";
 
@@ -228,6 +231,71 @@ export default function HomePage() {
                 닫고 다시 시도
               </button>
             </div>
+          )}
+        </section>
+
+        {/* 게임 간 비교 */}
+        <section>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <GitCompare size={12} />
+            게임 간 비교
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {/* G1 */}
+            <div className="space-y-2">
+              <p className="text-[10px] text-zinc-400">첫 번째 게임</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {SUPERCENT_GAMES.map((game) => (
+                  <button
+                    key={game.id}
+                    onClick={() => setCrossG1(game)}
+                    className={`flex flex-col items-center py-2 px-1 rounded-lg border text-xs transition-all ${
+                      crossG1?.id === game.id
+                        ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                        : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
+                    }`}
+                  >
+                    <span className="text-base">{game.emoji}</span>
+                    <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* G2 */}
+            <div className="space-y-2">
+              <p className="text-[10px] text-zinc-400">두 번째 게임</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {SUPERCENT_GAMES.map((game) => (
+                  <button
+                    key={game.id}
+                    onClick={() => setCrossG2(game)}
+                    className={`flex flex-col items-center py-2 px-1 rounded-lg border text-xs transition-all ${
+                      crossG2?.id === game.id
+                        ? "border-violet-400 bg-violet-50 text-violet-700"
+                        : "border-zinc-200 hover:border-zinc-300 text-zinc-500"
+                    }`}
+                  >
+                    <span className="text-base">{game.emoji}</span>
+                    <span className="truncate w-full text-center mt-0.5 text-[10px]">{game.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {crossG1 && crossG2 && crossG1.id !== crossG2.id ? (
+            <Link
+              href={`/cross?g1=${crossG1.id}&g2=${crossG2.id}`}
+              className="mt-3 flex items-center justify-center gap-2 w-full py-2 rounded-lg border border-zinc-200 bg-white text-sm text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 transition-all"
+            >
+              <GitCompare size={14} />
+              {crossG1.emoji} {crossG1.name} vs {crossG2.emoji} {crossG2.name} 비교하기
+            </Link>
+          ) : (
+            <p className="mt-2 text-[10px] text-zinc-300 text-center">
+              {crossG1 && crossG2 && crossG1.id === crossG2.id
+                ? "서로 다른 게임을 선택해 주세요"
+                : "두 게임을 선택하면 비교 대시보드로 이동합니다"}
+            </p>
           )}
         </section>
 

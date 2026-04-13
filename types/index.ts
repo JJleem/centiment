@@ -60,6 +60,7 @@ export interface FetchReviewsResponse {
 export interface AnalyzeReviewsRequest {
   app_id: string;
   platform: Platform;
+  force?: boolean; // true = 전체 삭제 후 재분석, false(기본) = 신규 리뷰만 분석
 }
 
 export interface AnalyzeReviewsResponse {
