@@ -581,8 +581,8 @@ async function Dashboard({ game_id }: { game_id: string }) {
                   <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
                     <Smartphone size={11} /> iOS
                   </p>
-                  {ios && ios.dateTrend.length >= 2 ? (
-                    <VersionTrendChart data={ios.dateTrend} />
+                  {ios && (ios.dateTrend ?? []).length >= 2 ? (
+                    <VersionTrendChart data={ios.dateTrend ?? []} />
                   ) : (
                     <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
                       {ios ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
@@ -596,8 +596,8 @@ async function Dashboard({ game_id }: { game_id: string }) {
                   <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
                     <Play size={11} /> Android
                   </p>
-                  {android && android.dateTrend.length >= 2 ? (
-                    <VersionTrendChart data={android.dateTrend} />
+                  {android && (android.dateTrend ?? []).length >= 2 ? (
+                    <VersionTrendChart data={android.dateTrend ?? []} />
                   ) : (
                     <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
                       {android ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
