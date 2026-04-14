@@ -22,6 +22,7 @@ import ReanalyzeButton from "@/components/ReanalyzeButton";
 import CsvExportButton from "@/components/CsvExportButton";
 import AnalysisTimeline from "@/components/AnalysisTimeline";
 import CategoryInsights from "@/components/CategoryInsights";
+import LangSentimentChart from "@/components/LangSentimentChart";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
 import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
 import RatingDistChart from "@/components/RatingDistChart";
@@ -651,6 +652,18 @@ async function Dashboard({ game_id }: { game_id: string }) {
             ) : (
               <p className="text-xs text-zinc-300 text-center py-6">카테고리 데이터가 없습니다.</p>
             )}
+          </CardContent>
+        </Card>
+
+        {/* 국가별 감성 분포 */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              🌍 국가별 감성 분포
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LangSentimentChart gameId={game_id} hasIos={!!ios} hasAndroid={!!android} />
           </CardContent>
         </Card>
 

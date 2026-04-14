@@ -134,6 +134,7 @@ interface ReviewRow {
   version: string | null;
   content: string;
   rating: number;
+  lang: string | null;
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
       if (force) {
         const { data: allReviews, error: fetchErr } = await supabase
           .from("reviews")
-          .select("id, app_id, platform, version, content, rating")
+          .select("id, app_id, platform, version, content, rating, lang")
           .eq("app_id", app_id)
           .eq("platform", platform);
 
@@ -210,6 +211,7 @@ export async function POST(req: NextRequest) {
           app_id: row.app_id,
           platform: row.platform,
           version: row.version,
+          lang: row.lang,
           sentiment: allClassified[i].sentiment,
           category: allClassified[i].category,
           keywords: allClassified[i].keywords,
@@ -238,7 +240,7 @@ export async function POST(req: NextRequest) {
 
       const { data: allReviews, error: fetchErr } = await supabase
         .from("reviews")
-        .select("id, app_id, platform, version, content, rating")
+        .select("id, app_id, platform, version, content, rating, lang")
         .eq("app_id", app_id)
         .eq("platform", platform);
 
@@ -278,6 +280,7 @@ export async function POST(req: NextRequest) {
         app_id: row.app_id,
         platform: row.platform,
         version: row.version,
+        lang: row.lang,
         sentiment: newClassified[i].sentiment,
         category: newClassified[i].category,
         keywords: newClassified[i].keywords,
