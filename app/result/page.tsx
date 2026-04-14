@@ -21,6 +21,7 @@ import ReviewList, { type CombinedItem } from "@/components/ReviewList";
 import ReanalyzeButton from "@/components/ReanalyzeButton";
 import CsvExportButton from "@/components/CsvExportButton";
 import AnalysisTimeline from "@/components/AnalysisTimeline";
+import CategoryInsights from "@/components/CategoryInsights";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
 import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
 import RatingDistChart from "@/components/RatingDistChart";
@@ -502,6 +503,22 @@ async function Dashboard({ game_id }: { game_id: string }) {
             </CardContent>
           </Card>
         </div>
+
+        {/* 카테고리별 세부 인사이트 (Haiku) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <BarChart2 size={13} /> 카테고리별 세부 인사이트
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CategoryInsights
+              gameId={game_id}
+              hasIos={!!ios}
+              hasAndroid={!!android}
+            />
+          </CardContent>
+        </Card>
 
         {/* 이슈 목록 — iOS / Android 각각 버그가 있을 때만 */}
         {((ios?.issues?.length ?? 0) > 0 || (android?.issues?.length ?? 0) > 0) && (

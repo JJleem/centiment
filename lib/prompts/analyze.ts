@@ -20,6 +20,19 @@ ${gameSection}
 Return ONLY one sentence in Korean (no markdown, no explanation) that highlights the most meaningful difference across these games and gives a concrete actionable insight for the team based on current live data.`;
 }
 
+// ─── Haiku: 카테고리별 한 줄 인사이트 ────────────────────────────────────────
+// Input : 카테고리명 + 샘플 리뷰 내용 (최대 10건)
+// Output: 한 문장 한국어 인사이트
+export function buildCategoryInsightPrompt(category: string, reviews: string[]): string {
+  const samples = reviews.slice(0, 10).map((r, i) => `[${i + 1}] ${r.slice(0, 200)}`).join("\n");
+  return `You are a mobile game analyst. Summarize what users say about "${category}" in ONE sentence in Korean.
+
+Sample reviews (${reviews.length} total):
+${samples}
+
+Return ONLY one concrete sentence in Korean. Focus on the most common pattern or issue. No markdown, no explanation.`;
+}
+
 // ─── Haiku: 리뷰 배치 분류 ────────────────────────────────────────────────────
 // Input : ReviewPayload[] (20건)
 // Output: JSON array — { sentiment, category, keywords }[]
