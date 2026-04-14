@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { SUPERCENT_GAMES, GENRES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
 import CrossHistorySection from "@/components/CrossHistorySection";
+import WeeklySummaryCards from "@/components/WeeklySummaryCards";
 import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
 import {
@@ -289,6 +290,9 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+
+            {/* 주간 요약 카드 */}
+            <WeeklySummaryCards />
 
             {/* Count label */}
             <div className="flex items-center justify-between px-0.5">
