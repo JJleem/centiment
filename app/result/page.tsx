@@ -21,6 +21,7 @@ import ReviewList, { type CombinedItem } from "@/components/ReviewList";
 import ReanalyzeButton from "@/components/ReanalyzeButton";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
 import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
+import RatingDistChart from "@/components/RatingDistChart";
 import type { Platform, Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ interface PlatformStats {
   issues: string[];
   versionTrend: VersionTrendData[];
   reviewItems: CombinedItem[];
+  ratingDist: Record<number, number>;
 }
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
@@ -128,6 +130,13 @@ async function getPlatformStats(
       total: counts.positive + counts.negative + counts.neutral,
     }));
 
+  // 평점 분포
+  const ratingDist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const r of reviewRows) {
+    const star = Math.round(r.rating);
+    if (star >= 1 && star <= 5) ratingDist[star]++;
+  }
+
   // 리뷰 + 분석 페어링 (index 기준)
   const reviewItems: CombinedItem[] = rows.map((analysis, i) => ({
     content: reviewRows[i]?.content ?? "",
@@ -149,6 +158,7 @@ async function getPlatformStats(
     issues: rows[0].issues ?? [],
     versionTrend,
     reviewItems,
+    ratingDist,
   };
 }
 
@@ -459,6 +469,43 @@ async function Dashboard({ game_id }: { game_id: string }) {
             )}
           </CardContent>
         </Card>
+
+        {/* 평점 분포 */}
+        {(ios || android) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <span className="text-amber-400">★</span> 평점 분포
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
+                    <Smartphone size={11} /> iOS
+                    {ios && <span className="ml-auto font-normal text-zinc-400">{ios.total}건</span>}
+                  </p>
+                  {ios ? (
+                    <RatingDistChart dist={ios.ratingDist} total={ios.total} color="sky" />
+                  ) : (
+                    <p className="text-xs text-zinc-300 text-center py-4">분석 데이터 없음</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
+                    <Play size={11} /> Android
+                    {android && <span className="ml-auto font-normal text-zinc-400">{android.total}건</span>}
+                  </p>
+                  {android ? (
+                    <RatingDistChart dist={android.ratingDist} total={android.total} color="teal" />
+                  ) : (
+                    <p className="text-xs text-zinc-300 text-center py-4">분석 데이터 없음</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 카테고리 비교 */}
         <Card>
