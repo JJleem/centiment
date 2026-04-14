@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Smartphone, Play } from "lucide-react";
+import { ChevronDown, Smartphone, Play, X } from "lucide-react";
 import type { Sentiment, ReviewCategory, Platform } from "@/types";
 
 const PAGE_SIZE = 20;
@@ -63,11 +63,67 @@ interface Props {
   items: CombinedItem[];
 }
 
+function ReviewModal({ item, onClose }: { item: CombinedItem; onClose: () => void }) {
+  const sentCfg = SENTIMENT_CONFIG[item.sentiment];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+          <div className="flex items-center gap-2">
+            <PlatformBadge platform={item.platform} />
+            <StarRating rating={item.rating} />
+            <span className="text-[10px] text-zinc-300">
+              {new Date(item.review_date).toLocaleDateString("ko-KR", {
+                year: "numeric", month: "short", day: "numeric",
+              })}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        {/* 배지 */}
+        <div className="flex items-center gap-1.5 px-5 py-2 border-b border-zinc-50">
+          <Badge variant="outline" className={`text-[10px] ${sentCfg.color}`}>{sentCfg.label}</Badge>
+          <Badge variant="secondary" className="text-[10px]">{CATEGORY_LABEL[item.category]}</Badge>
+          {item.version && <span className="text-[10px] text-zinc-300">v{item.version}</span>}
+        </div>
+        {/* 본문 */}
+        <div className="overflow-y-auto px-5 py-4">
+          <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+          {item.keywords?.length > 0 && (
+            <div className="flex gap-1 mt-4">
+              {item.keywords.map((kw) => (
+                <span key={kw} className="text-[10px] text-zinc-400">#{kw}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewList({ items }: Props) {
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<Sentiment | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<ReviewCategory | "all">("all");
   const [shown, setShown] = useState(PAGE_SIZE);
+  const [selected, setSelected] = useState<CombinedItem | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -176,6 +232,8 @@ export default function ReviewList({ items }: Props) {
       </p>
 
       {/* 리뷰 카드 */}
+      {selected && <ReviewModal item={selected} onClose={() => setSelected(null)} />}
+
       {filtered.length === 0 ? (
         <div className="py-16 text-center text-zinc-300 text-sm">
           해당 조건의 리뷰가 없습니다.
@@ -185,7 +243,11 @@ export default function ReviewList({ items }: Props) {
           {visible.map((item, i) => {
             const sentCfg = SENTIMENT_CONFIG[item.sentiment];
             return (
-              <Card key={i} className="border-zinc-100">
+              <Card
+                key={i}
+                className="border-zinc-100 cursor-pointer hover:border-zinc-300 transition-colors"
+                onClick={() => setSelected(item)}
+              >
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2">
