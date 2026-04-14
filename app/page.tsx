@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
@@ -13,8 +13,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { readAnalyzeStream } from "@/lib/utils";
+import type { AnalyzeProgressEvent } from "@/types";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
+
+type PlatformPhase = "idle" | "classifying" | "summarizing" | "done";
+interface PlatformProgress { phase: PlatformPhase; batchDone: number; batchTotal: number; }
+const INIT_PROGRESS: PlatformProgress = { phase: "idle", batchDone: 0, batchTotal: 0 };
 
 const GENRES = ["전체", "타이쿤", "캐주얼", "RPG", "레이싱"] as const;
 
@@ -26,17 +32,18 @@ function formatCount(n: number): string {
 
 // ─── Cross comparison dropdown ─────────────────────────────────────────────────
 function GameSelectDropdown({
-  label, selected, onSelect, exclude, color,
+  label, selected, onSelect, exclude, color, games,
 }: {
   label: string;
   selected: GamePreset | null;
   onSelect: (g: GamePreset) => void;
   exclude?: string;
   color: "indigo" | "violet";
+  games: GamePreset[];
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const filtered = SUPERCENT_GAMES.filter(
+  const filtered = games.filter(
     (g) => g.id !== exclude && g.name.toLowerCase().includes(q.toLowerCase())
   );
   const ring =
@@ -112,8 +119,54 @@ export default function HomePage() {
   const [genreFilter, setGenreFilter] = useState<string>("전체");
   const [crossG1, setCrossG1] = useState<GamePreset | null>(null);
   const [crossG2, setCrossG2] = useState<GamePreset | null>(null);
+  const [analyzedGames, setAnalyzedGames] = useState<GamePreset[]>([]);
+  const [analyzeProgress, setAnalyzeProgress] = useState<{ ios: PlatformProgress; android: PlatformProgress }>({
+    ios: INIT_PROGRESS,
+    android: INIT_PROGRESS,
+  });
+
+  useEffect(() => {
+    fetch("/api/history")
+      .then((r) => r.json())
+      .then((data) => {
+        const ids = new Set<string>((data.history ?? []).map((h: { app_id: string }) => h.app_id));
+        const games = SUPERCENT_GAMES.filter(
+          (g) => ids.has(g.ios_app_id) || ids.has(g.android_package)
+        );
+        setAnalyzedGames(games);
+      })
+      .catch(() => {});
+  }, []);
 
   const isRunning = step === "fetching" || step === "analyzing";
+
+  const progressValue = useMemo(() => {
+    if (step === "idle" || step === "error") return 0;
+    if (step === "fetching") return 15;
+    if (step === "done") return 100;
+    const frac = (p: PlatformProgress) => {
+      if (p.phase === "idle") return 0;
+      if (p.phase === "classifying") return p.batchTotal > 0 ? (p.batchDone / p.batchTotal) * 0.85 : 0.05;
+      if (p.phase === "summarizing") return 0.9;
+      return 1;
+    };
+    const combined = (frac(analyzeProgress.ios) + frac(analyzeProgress.android)) / 2;
+    return Math.round(15 + combined * 80);
+  }, [step, analyzeProgress]);
+
+  const progressLabel = useMemo(() => {
+    if (step === "fetching") return "iOS · Android 리뷰 수집 중...";
+    if (step === "done") return "완료!";
+    if (step !== "analyzing") return "";
+    const label = (p: PlatformProgress, name: string) => {
+      if (p.phase === "idle") return `${name} 준비 중`;
+      if (p.phase === "classifying")
+        return p.batchTotal > 0 ? `${name} 분류 중 (${p.batchDone}/${p.batchTotal})` : `${name} 분류 준비 중`;
+      if (p.phase === "summarizing") return `${name} 요약 중`;
+      return `${name} 완료`;
+    };
+    return `${label(analyzeProgress.ios, "iOS")} · ${label(analyzeProgress.android, "Android")}`;
+  }, [step, analyzeProgress]);
 
   const filteredGames = useMemo(
     () =>
@@ -129,6 +182,8 @@ export default function HomePage() {
     if (!selectedGame) return;
     setStep("fetching");
     setErrorMsg("");
+    setAnalyzeProgress({ ios: INIT_PROGRESS, android: INIT_PROGRESS });
+
     try {
       const [iosFetch, androidFetch] = await Promise.all([
         fetch("/api/reviews/fetch", {
@@ -152,7 +207,8 @@ export default function HomePage() {
       }
 
       setStep("analyzing");
-      const [iosAnalyze, androidAnalyze] = await Promise.all([
+
+      const [iosRes, androidRes] = await Promise.all([
         fetch("/api/reviews/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -164,14 +220,30 @@ export default function HomePage() {
           body: JSON.stringify({ app_id: selectedGame.android_package, platform: "android" }),
         }),
       ]);
-      if (!iosAnalyze.ok) {
-        const b = await iosAnalyze.json().catch(() => ({}));
-        throw new Error(`[iOS 분석 실패] ${b.error ?? iosAnalyze.statusText}`);
+      if (!iosRes.ok) {
+        const b = await iosRes.json().catch(() => ({}));
+        throw new Error(`[iOS 분석 실패] ${b.error ?? iosRes.statusText}`);
       }
-      if (!androidAnalyze.ok) {
-        const b = await androidAnalyze.json().catch(() => ({}));
-        throw new Error(`[Android 분석 실패] ${b.error ?? androidAnalyze.statusText}`);
+      if (!androidRes.ok) {
+        const b = await androidRes.json().catch(() => ({}));
+        throw new Error(`[Android 분석 실패] ${b.error ?? androidRes.statusText}`);
       }
+
+      const updateProgress = (platform: "ios" | "android") => (event: AnalyzeProgressEvent) => {
+        setAnalyzeProgress((prev) => {
+          const p = { ...prev[platform] };
+          if (event.type === "start") { p.phase = "classifying"; p.batchTotal = event.total_batches; }
+          else if (event.type === "batch") { p.phase = "classifying"; p.batchDone = event.done; p.batchTotal = event.total; }
+          else if (event.type === "summarizing") { p.phase = "summarizing"; }
+          else if (event.type === "done") { p.phase = "done"; }
+          return { ...prev, [platform]: p };
+        });
+      };
+
+      await Promise.all([
+        readAnalyzeStream(iosRes, updateProgress("ios")),
+        readAnalyzeStream(androidRes, updateProgress("android")),
+      ]);
 
       setStep("done");
       setTimeout(() => router.push(`/result?game=${selectedGame.id}`), 500);
@@ -336,13 +408,8 @@ export default function HomePage() {
 
             {step !== "idle" && step !== "error" && (
               <div className="space-y-1">
-                <Progress
-                  value={step === "fetching" ? 30 : step === "analyzing" ? 70 : 100}
-                  className="h-1.5"
-                />
-                <p className="text-[11px] text-zinc-400 text-right">
-                  {step === "fetching" ? "리뷰 수집 중..." : step === "analyzing" ? "AI 분석 중..." : "완료!"}
-                </p>
+                <Progress value={progressValue} className="h-1.5" />
+                <p className="text-[11px] text-zinc-400 text-right">{progressLabel}</p>
               </div>
             )}
 
@@ -374,6 +441,7 @@ export default function HomePage() {
                 onSelect={setCrossG1}
                 exclude={crossG2?.id}
                 color="indigo"
+                games={analyzedGames}
               />
               <GameSelectDropdown
                 label="두 번째 게임"
@@ -381,6 +449,7 @@ export default function HomePage() {
                 onSelect={setCrossG2}
                 exclude={crossG1?.id}
                 color="violet"
+                games={analyzedGames}
               />
             </div>
             {crossG1 && crossG2 && crossG1.id !== crossG2.id ? (

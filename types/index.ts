@@ -71,6 +71,14 @@ export interface AnalyzeReviewsResponse {
   };
 }
 
+// ─── Analyze streaming events ───────────────────────────────────────────────
+export type AnalyzeProgressEvent =
+  | { type: "start"; total_batches: number }
+  | { type: "batch"; done: number; total: number }
+  | { type: "summarizing" }
+  | { type: "done"; analyzed: number }
+  | { type: "error"; message: string };
+
 // ─── Dashboard aggregates ───────────────────────────────────────────────────
 export interface SentimentSummary {
   positive: number;

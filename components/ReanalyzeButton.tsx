@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RefreshCw, Loader2, RotateCcw } from "lucide-react";
 import type { GamePreset } from "@/lib/presets";
+import { readAnalyzeStream } from "@/lib/utils";
 
 type Step = "idle" | "fetching" | "analyzing" | "done" | "error";
 
@@ -17,14 +18,6 @@ const STEP_LABEL: Record<Step, string> = {
   error:     "",
 };
 
-const STEP_PROGRESS: Record<Step, number> = {
-  idle:      0,
-  fetching:  35,
-  analyzing: 75,
-  done:      100,
-  error:     0,
-};
-
 interface Props {
   game: GamePreset;
 }
@@ -33,15 +26,16 @@ export default function ReanalyzeButton({ game }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [progressValue, setProgressValue] = useState(0);
 
   const isRunning = step === "fetching" || step === "analyzing";
 
   async function handleReanalyze(force = false) {
     setStep("fetching");
     setErrorMsg("");
+    setProgressValue(15);
 
     try {
-      // iOS + Android 동시 수집
       const [iosFetch, androidFetch] = await Promise.all([
         fetch("/api/reviews/fetch", {
           method: "POST",
@@ -65,9 +59,20 @@ export default function ReanalyzeButton({ game }: Props) {
       }
 
       setStep("analyzing");
+      setProgressValue(20);
 
-      // iOS + Android 동시 분석
-      const [iosAnalyze, androidAnalyze] = await Promise.all([
+      // 배치 진행률 추적 (iOS + Android 합산)
+      const batchTotals = { ios: 0, android: 0 };
+      const batchDones  = { ios: 0, android: 0 };
+
+      const updatePct = () => {
+        const total = batchTotals.ios + batchTotals.android;
+        if (total === 0) return;
+        const done = batchDones.ios + batchDones.android;
+        setProgressValue(Math.round(20 + (done / total) * 70));
+      };
+
+      const [iosRes, androidRes] = await Promise.all([
         fetch("/api/reviews/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -80,22 +85,38 @@ export default function ReanalyzeButton({ game }: Props) {
         }),
       ]);
 
-      if (!iosAnalyze.ok) {
-        const err = await iosAnalyze.json().catch(() => ({}));
-        throw new Error(`iOS 분석 실패: ${err.error ?? iosAnalyze.statusText}`);
+      if (!iosRes.ok) {
+        const err = await iosRes.json().catch(() => ({}));
+        throw new Error(`iOS 분석 실패: ${err.error ?? iosRes.statusText}`);
       }
-      if (!androidAnalyze.ok) {
-        const err = await androidAnalyze.json().catch(() => ({}));
-        throw new Error(`Android 분석 실패: ${err.error ?? androidAnalyze.statusText}`);
+      if (!androidRes.ok) {
+        const err = await androidRes.json().catch(() => ({}));
+        throw new Error(`Android 분석 실패: ${err.error ?? androidRes.statusText}`);
       }
 
+      await Promise.all([
+        readAnalyzeStream(iosRes, (event) => {
+          if (event.type === "start") { batchTotals.ios = event.total_batches; }
+          else if (event.type === "batch") { batchDones.ios = event.done; batchTotals.ios = event.total; updatePct(); }
+          else if (event.type === "summarizing") { setProgressValue((v) => Math.max(v, 85)); }
+        }),
+        readAnalyzeStream(androidRes, (event) => {
+          if (event.type === "start") { batchTotals.android = event.total_batches; }
+          else if (event.type === "batch") { batchDones.android = event.done; batchTotals.android = event.total; updatePct(); }
+          else if (event.type === "summarizing") { setProgressValue((v) => Math.max(v, 85)); }
+        }),
+      ]);
+
       setStep("done");
+      setProgressValue(100);
       setTimeout(() => {
         router.refresh();
         setStep("idle");
+        setProgressValue(0);
       }, 800);
     } catch (e) {
       setStep("error");
+      setProgressValue(0);
       setErrorMsg(e instanceof Error ? e.message : "알 수 없는 오류");
     }
   }
@@ -133,7 +154,7 @@ export default function ReanalyzeButton({ game }: Props) {
 
       {isRunning && (
         <div className="w-48 space-y-1">
-          <Progress value={STEP_PROGRESS[step]} className="h-1" />
+          <Progress value={progressValue} className="h-1" />
         </div>
       )}
 
