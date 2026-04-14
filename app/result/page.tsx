@@ -20,6 +20,7 @@ import GameIcon from "@/components/GameIcon";
 import ReviewList, { type CombinedItem } from "@/components/ReviewList";
 import ReanalyzeButton from "@/components/ReanalyzeButton";
 import CsvExportButton from "@/components/CsvExportButton";
+import AnalysisTimeline from "@/components/AnalysisTimeline";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
 import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
 import RatingDistChart from "@/components/RatingDistChart";
@@ -684,6 +685,18 @@ async function Dashboard({ game_id }: { game_id: string }) {
             </CardContent>
           </Card>
         )}
+
+        {/* 분석 이력 타임라인 */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <TrendingUp size={13} /> 분석 이력 타임라인
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AnalysisTimeline gameId={game_id} />
+          </CardContent>
+        </Card>
 
         {/* 키워드 비교 + 리뷰 드릴다운 (클라이언트 컴포넌트) */}
         <KeywordDrilldown
