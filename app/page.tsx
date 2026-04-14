@@ -117,6 +117,7 @@ export default function HomePage() {
   const [genreFilter, setGenreFilter] = useState<string>("전체");
   const [crossG1, setCrossG1] = useState<GamePreset | null>(null);
   const [crossG2, setCrossG2] = useState<GamePreset | null>(null);
+  const [crossG3, setCrossG3] = useState<GamePreset | null>(null);
   const [analyzedGames, setAnalyzedGames] = useState<GamePreset[]>([]);
   const [analyzeProgress, setAnalyzeProgress] = useState<{ ios: PlatformProgress; android: PlatformProgress }>({
     ios: INIT_PROGRESS, android: INIT_PROGRESS,
@@ -569,13 +570,21 @@ export default function HomePage() {
                       games={analyzedGames}
                     />
                   </div>
+                  <GameSelectDropdown
+                    label="게임 3 (선택)"
+                    selected={crossG3}
+                    onSelect={setCrossG3}
+                    exclude={crossG1?.id}
+                    color="violet"
+                    games={analyzedGames.filter((g) => g.id !== crossG1?.id && g.id !== crossG2?.id)}
+                  />
                   {crossG1 && crossG2 && crossG1.id !== crossG2.id ? (
                     <Link
-                      href={`/cross?g1=${crossG1.id}&g2=${crossG2.id}`}
+                      href={`/cross?g1=${crossG1.id}&g2=${crossG2.id}${crossG3 ? `&g3=${crossG3.id}` : ""}`}
                       className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 text-xs font-semibold text-indigo-600 hover:from-indigo-100 hover:to-violet-100 hover:border-indigo-200 transition-all"
                     >
                       <GitCompare size={13} />
-                      {crossG1.name} vs {crossG2.name} 비교
+                      {crossG3 ? "3게임 비교" : `${crossG1.name} vs ${crossG2.name} 비교`}
                     </Link>
                   ) : (
                     <p className="text-[11px] text-zinc-300 text-center py-1">

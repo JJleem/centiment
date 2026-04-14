@@ -39,17 +39,16 @@ async function fetchStats(appIds: string[]) {
 }
 
 export async function POST(req: NextRequest) {
-  const { g1, g2 } = await req.json() as { g1: string; g2: string };
+  const { g1, g2, g3 } = await req.json() as { g1: string; g2: string; g3?: string };
 
-  const game1 = SUPERCENT_GAMES.find((g) => g.id === g1);
-  const game2 = SUPERCENT_GAMES.find((g) => g.id === g2);
-  if (!game1 || !game2) return NextResponse.json({ error: "game not found" }, { status: 400 });
+  const gameIds = [g1, g2, ...(g3 ? [g3] : [])];
+  const games = gameIds.map((id) => SUPERCENT_GAMES.find((g) => g.id === id)).filter(Boolean);
+  if (games.length < 2) return NextResponse.json({ error: "game not found" }, { status: 400 });
 
-  const [stats1, stats2] = await Promise.all([
-    fetchStats([game1.ios_app_id, game1.android_package]),
-    fetchStats([game2.ios_app_id, game2.android_package]),
-  ]);
-  if (!stats1 || !stats2) return NextResponse.json({ error: "no data" }, { status: 400 });
+  const statsList = await Promise.all(
+    games.map((g) => fetchStats([g!.ios_app_id, g!.android_package]))
+  );
+  if (statsList.some((s) => !s)) return NextResponse.json({ error: "no data" }, { status: 400 });
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const res = await anthropic.messages.create({
@@ -58,21 +57,28 @@ export async function POST(req: NextRequest) {
     messages: [{
       role: "user",
       content: buildCrossComparePrompt(
-        { name: game1.name, total: stats1.total, positive: stats1.sentimentCount.positive, negative: stats1.sentimentCount.negative, topCategories: stats1.topCategories, topKeywords: stats1.topKeywords },
-        { name: game2.name, total: stats2.total, positive: stats2.sentimentCount.positive, negative: stats2.sentimentCount.negative, topCategories: stats2.topCategories, topKeywords: stats2.topKeywords },
+        statsList.map((s, i) => ({
+          name: games[i]!.name,
+          total: s!.total,
+          positive: s!.sentimentCount.positive,
+          negative: s!.sentimentCount.negative,
+          topCategories: s!.topCategories,
+          topKeywords: s!.topKeywords,
+        }))
       ),
     }],
   });
   console.log(`[cross-insight][sonnet] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`);
   const insight = res.content[0].type === "text" ? res.content[0].text.trim() : "";
 
-  await supabaseAdmin.from("cross_comparison_history").insert({
-    game1_id: g1,
-    game2_id: g2,
-    game1_name: game1.name,
-    game2_name: game2.name,
-    insight,
-  });
+  // 2게임일 때만 히스토리 저장
+  if (!g3) {
+    await supabaseAdmin.from("cross_comparison_history").insert({
+      game1_id: g1, game2_id: g2,
+      game1_name: games[0]!.name, game2_name: games[1]!.name,
+      insight,
+    });
+  }
 
   return NextResponse.json({ insight });
 }

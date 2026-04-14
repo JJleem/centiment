@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
-export default function ReanalyzeCrossButton({ g1, g2 }: { g1: string; g2: string }) {
+export default function ReanalyzeCrossButton({ g1, g2, g3 }: { g1: string; g2: string; g3?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -14,7 +14,7 @@ export default function ReanalyzeCrossButton({ g1, g2 }: { g1: string; g2: strin
       await fetch("/api/cross-insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ g1, g2 }),
+        body: JSON.stringify({ g1, g2, ...(g3 ? { g3 } : {}) }),
       });
       router.refresh();
     } finally {
