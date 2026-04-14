@@ -216,7 +216,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
   const crossInsight = stats1 && stats2
     ? await unstable_cache(
         () => getCrossInsight(stats1, stats2),
-        [`cross-insight-${g1}-${g2}`],
+        [`cross-insight-v2-${g1}-${g2}`],
         { revalidate: 3600 }
       )()
     : null;

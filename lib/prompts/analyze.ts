@@ -10,17 +10,19 @@ export function buildCrossComparePrompt(
   const pct = (n: number, t: number) => (t > 0 ? Math.round((n / t) * 100) : 0);
   return `You are a mobile game product manager writing a one-sentence competitive insight in Korean.
 
-Game 1 — ${g1.name}:
+Both games are ALREADY LIVE with real user reviews. Do NOT suggest pre-launch actions or hypothetical strategies. Focus only on what the live review data reveals right now and what the team should do next for each game.
+
+${g1.name} (live):
 - ${g1.total} reviews, positive ${pct(g1.positive, g1.total)}%, negative ${pct(g1.negative, g1.total)}%
 - Top categories: ${g1.topCategories.slice(0, 3).join(", ")}
 - Top keywords: ${g1.topKeywords.slice(0, 8).join(", ")}
 
-Game 2 — ${g2.name}:
+${g2.name} (live):
 - ${g2.total} reviews, positive ${pct(g2.positive, g2.total)}%, negative ${pct(g2.negative, g2.total)}%
 - Top categories: ${g2.topCategories.slice(0, 3).join(", ")}
 - Top keywords: ${g2.topKeywords.slice(0, 8).join(", ")}
 
-Return ONLY one sentence in Korean (no markdown, no explanation) that highlights the most meaningful difference between the two games and gives an actionable insight for the product team.`;
+Return ONLY one sentence in Korean (no markdown, no explanation) that highlights the most meaningful difference between the two games and gives a concrete actionable insight for the team based on current live data.`;
 }
 
 // ─── Haiku: 리뷰 배치 분류 ────────────────────────────────────────────────────
