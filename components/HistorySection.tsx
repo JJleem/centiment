@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Clock, ChevronRight, Smartphone, Play } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import GameIcon from "@/components/GameIcon";
@@ -21,10 +20,10 @@ function SentimentMiniBar({ positive, negative, neutral, total }: {
   );
 }
 
-interface GameHistory {
-  ios?: HistoryItem;
-  android?: HistoryItem;
-  analyzed_at: string;
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("ko-KR", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 export default function HistorySection() {
@@ -69,57 +68,78 @@ export default function HistorySection() {
       <div className="space-y-2">
         {gameHistory.map((entry) => {
           const { game, ios, android, analyzed_at } = entry!;
+
           const totalPositive = (ios?.positive ?? 0) + (android?.positive ?? 0);
           const totalNegative = (ios?.negative ?? 0) + (android?.negative ?? 0);
           const totalNeutral  = (ios?.neutral  ?? 0) + (android?.neutral  ?? 0);
           const total = totalPositive + totalNegative + totalNeutral;
           const pctPositive = total > 0 ? Math.round((totalPositive / total) * 100) : 0;
 
-          const date = new Date(analyzed_at).toLocaleDateString("ko-KR", {
-            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-          });
+          // 긍정률 색상
+          const pctColor =
+            pctPositive >= 70 ? "text-emerald-600 bg-emerald-50 border-emerald-200" :
+            pctPositive >= 40 ? "text-amber-600 bg-amber-50 border-amber-200" :
+                                "text-rose-600 bg-rose-50 border-rose-200";
+
+          // AI 요약 (iOS 우선, 없으면 Android)
+          const summary = ios?.summary || android?.summary || "";
 
           return (
-            <Card
+            <div
               key={game.id}
-              className="cursor-pointer hover:border-indigo-200 transition-colors"
+              className="bg-white border border-zinc-200 rounded-xl px-4 py-3 cursor-pointer hover:border-indigo-200 hover:shadow-sm transition-all"
               onClick={() => router.push(`/result?game=${game.id}`)}
             >
-              <CardContent className="py-3 px-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <GameIcon game={game} size={28} className="shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-sm font-medium truncate">{game.name}</span>
-                        {/* 플랫폼 유무 표시 */}
-                        <span className={`text-[10px] ${ios ? "text-sky-500" : "text-zinc-300"}`}>
-                          <Smartphone size={10} className="inline" />
-                        </span>
-                        <span className={`text-[10px] ${android ? "text-teal-500" : "text-zinc-300"}`}>
-                          <Play size={10} className="inline" />
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <SentimentMiniBar
-                          positive={totalPositive}
-                          negative={totalNegative}
-                          neutral={totalNeutral}
-                          total={total}
-                        />
-                        <span className="text-[10px] text-zinc-400 shrink-0">
-                          긍정 {pctPositive}% · {total}건
-                        </span>
-                      </div>
+              {/* 상단: 게임 정보 + 날짜 */}
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <GameIcon game={game} size={28} className="shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium truncate">{game.name}</span>
+                      <span className={`text-[10px] ${ios ? "text-sky-500" : "text-zinc-300"}`}>
+                        <Smartphone size={10} className="inline" />
+                      </span>
+                      <span className={`text-[10px] ${android ? "text-teal-500" : "text-zinc-300"}`}>
+                        <Play size={10} className="inline" />
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-zinc-300">{date}</span>
-                    <ChevronRight size={14} className="text-zinc-300" />
+                    {/* iOS / Android 건수 */}
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      {ios && <span className="text-sky-500">iOS {ios.total}건</span>}
+                      {ios && android && <span className="text-zinc-300 mx-1">·</span>}
+                      {android && <span className="text-teal-500">Android {android.total}건</span>}
+                    </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] text-zinc-400">{formatDate(analyzed_at)}</span>
+                  <ChevronRight size={14} className="text-zinc-300" />
+                </div>
+              </div>
+
+              {/* 감성 바 + 긍정률 */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex-1">
+                  <SentimentMiniBar
+                    positive={totalPositive}
+                    negative={totalNegative}
+                    neutral={totalNeutral}
+                    total={total}
+                  />
+                </div>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border shrink-0 ${pctColor}`}>
+                  긍정 {pctPositive}%
+                </span>
+              </div>
+
+              {/* AI 요약 */}
+              {summary && (
+                <p className="text-[11px] text-zinc-400 line-clamp-1 leading-relaxed">
+                  {summary}
+                </p>
+              )}
+            </div>
           );
         })}
       </div>
