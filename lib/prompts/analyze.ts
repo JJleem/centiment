@@ -1,5 +1,28 @@
 import type { ReviewPayload } from "@/types";
 
+// ─── Sonnet: 크로스 비교 인사이트 ─────────────────────────────────────────────
+// Input : 두 게임의 집계 통계
+// Output: 한 문장 한국어 인사이트
+export function buildCrossComparePrompt(
+  g1: { name: string; total: number; positive: number; negative: number; topCategories: string[]; topKeywords: string[] },
+  g2: { name: string; total: number; positive: number; negative: number; topCategories: string[]; topKeywords: string[] }
+): string {
+  const pct = (n: number, t: number) => (t > 0 ? Math.round((n / t) * 100) : 0);
+  return `You are a mobile game product manager writing a one-sentence competitive insight in Korean.
+
+Game 1 — ${g1.name}:
+- ${g1.total} reviews, positive ${pct(g1.positive, g1.total)}%, negative ${pct(g1.negative, g1.total)}%
+- Top categories: ${g1.topCategories.slice(0, 3).join(", ")}
+- Top keywords: ${g1.topKeywords.slice(0, 8).join(", ")}
+
+Game 2 — ${g2.name}:
+- ${g2.total} reviews, positive ${pct(g2.positive, g2.total)}%, negative ${pct(g2.negative, g2.total)}%
+- Top categories: ${g2.topCategories.slice(0, 3).join(", ")}
+- Top keywords: ${g2.topKeywords.slice(0, 8).join(", ")}
+
+Return ONLY one sentence in Korean (no markdown, no explanation) that highlights the most meaningful difference between the two games and gives an actionable insight for the product team.`;
+}
+
 // ─── Haiku: 리뷰 배치 분류 ────────────────────────────────────────────────────
 // Input : ReviewPayload[] (20건)
 // Output: JSON array — { sentiment, category, keywords }[]
@@ -24,7 +47,11 @@ Return ONLY a JSON array (no markdown, no explanation) with exactly ${batch.leng
 ]
 
 Rules:
-- sentiment: positive(4-5★ praise), negative(1-2★ complaints or 3★ mixed criticism), neutral(3★ balanced)
+- sentiment: judge by review CONTENT first; use rating only as a tiebreaker when content is ambiguous
+  - positive: content expresses satisfaction, praise, or recommendation (regardless of rating)
+  - negative: content expresses complaints, frustration, or criticism (regardless of rating)
+  - neutral: content is vague, too short to judge (e.g. "ㅎㅎ", "굿", "잘됨"), or genuinely balanced — do NOT force positive/negative on meaningless reviews
+  - if rating and content strongly conflict, ALWAYS trust content over rating
 - category: pick the single most dominant topic
 - keywords: always output in English regardless of review language, lowercase, max 3 words each
 

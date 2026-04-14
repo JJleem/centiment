@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import Anthropic from "@anthropic-ai/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,9 +13,11 @@ import {
   Tag,
   GitCompare,
   BarChart2,
+  Sparkles,
 } from "lucide-react";
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import GameIcon from "@/components/GameIcon";
+import { buildCrossComparePrompt } from "@/lib/prompts/analyze";
 import type { Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -70,6 +73,25 @@ async function getGameStats(game: GamePreset): Promise<GameStats | null> {
     .map(([kw]) => kw);
 
   return { game, total: rows.length, sentimentCount, sortedCategories, topKeywords };
+}
+
+async function getCrossInsight(stats1: GameStats, stats2: GameStats): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const toInput = (s: GameStats) => ({
+    name: s.game.name,
+    total: s.total,
+    positive: s.sentimentCount.positive,
+    negative: s.sentimentCount.negative,
+    topCategories: s.sortedCategories.slice(0, 3).map(([c]) => c),
+    topKeywords: s.topKeywords.slice(0, 8),
+  });
+  const res = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 256,
+    messages: [{ role: "user", content: buildCrossComparePrompt(toInput(stats1), toInput(stats2)) }],
+  });
+  console.log(`[cross][sonnet] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`);
+  return res.content[0].type === "text" ? res.content[0].text.trim() : "";
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -190,6 +212,15 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
     );
   }
 
+  // AI 크로스 인사이트 (두 게임 모두 데이터 있을 때만)
+  const crossInsight = stats1 && stats2
+    ? await unstable_cache(
+        () => getCrossInsight(stats1, stats2),
+        [`cross-insight-${g1}-${g2}`],
+        { revalidate: 3600 }
+      )()
+    : null;
+
   // 공통 키워드
   const kw1Set = new Set(stats1?.topKeywords ?? []);
   const kw2Set = new Set(stats2?.topKeywords ?? []);
@@ -230,6 +261,18 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
             <Link href={`/result?game=${g2}`} className="hover:text-violet-500 transition-colors">{game2.name} 상세 →</Link>
           </div>
         </div>
+
+        {/* AI 인사이트 */}
+        {crossInsight && (
+          <Card className="border-amber-100 bg-amber-50">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-start gap-2">
+                <Sparkles size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-amber-900 leading-relaxed">{crossInsight}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 감성 비교 */}
         <Card>
