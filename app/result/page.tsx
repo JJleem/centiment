@@ -51,6 +51,7 @@ interface PlatformStats {
   summary: string;
   issues: string[];
   versionTrend: VersionTrendData[];
+  dateTrend: VersionTrendData[];   // 월별 감성 트렌드 (version 필드를 레이블로 재사용)
   reviewItems: CombinedItem[];
   ratingDist: Record<number, number>;
 }
@@ -150,6 +151,22 @@ async function getPlatformStats(
     keywords: analysis.keywords,
   })).filter((item) => item.content !== "");
 
+  // 월별 감성 트렌드
+  const monthMap: Record<string, { positive: number; negative: number; neutral: number }> = {};
+  for (const item of reviewItems) {
+    if (!item.review_date) continue;
+    const month = item.review_date.slice(0, 7); // "YYYY-MM"
+    if (!monthMap[month]) monthMap[month] = { positive: 0, negative: 0, neutral: 0 };
+    monthMap[month][item.sentiment]++;
+  }
+  const dateTrend: VersionTrendData[] = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, counts]) => ({
+      version: month.slice(2).replace("-", "."), // "2024-01" → "24.01"
+      ...counts,
+      total: counts.positive + counts.negative + counts.neutral,
+    }));
+
   return {
     total: rows.length,
     fetchedTotal: reviewRows.length,
@@ -159,6 +176,7 @@ async function getPlatformStats(
     summary: rows[0].summary,
     issues: rows[0].issues ?? [],
     versionTrend,
+    dateTrend,
     reviewItems,
     ratingDist,
   };
@@ -548,6 +566,51 @@ async function Dashboard({ game_id }: { game_id: string }) {
             )}
           </CardContent>
         </Card>
+
+        {/* 월별 감성 트렌드 */}
+        {(ios || android) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <TrendingUp size={13} /> 월별 감성 트렌드
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
+                    <Smartphone size={11} /> iOS
+                  </p>
+                  {ios && ios.dateTrend.length >= 2 ? (
+                    <VersionTrendChart data={ios.dateTrend} />
+                  ) : (
+                    <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
+                      {ios ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
+                      {ios && ios.dateTrend.length < 2 && (
+                        <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
+                    <Play size={11} /> Android
+                  </p>
+                  {android && android.dateTrend.length >= 2 ? (
+                    <VersionTrendChart data={android.dateTrend} />
+                  ) : (
+                    <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
+                      {android ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
+                      {android && android.dateTrend.length < 2 && (
+                        <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 버전별 감성 트렌드 */}
         {(ios || android) && (
