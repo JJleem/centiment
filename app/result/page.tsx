@@ -586,7 +586,7 @@ async function Dashboard({ game_id }: { game_id: string }) {
                   ) : (
                     <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
                       {ios ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
-                      {ios && ios.dateTrend.length < 2 && (
+                      {ios && (ios.dateTrend ?? []).length < 2 && (
                         <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
                       )}
                     </p>
@@ -601,7 +601,7 @@ async function Dashboard({ game_id }: { game_id: string }) {
                   ) : (
                     <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
                       {android ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
-                      {android && android.dateTrend.length < 2 && (
+                      {android && (android.dateTrend ?? []).length < 2 && (
                         <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
                       )}
                     </p>
