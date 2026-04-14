@@ -44,6 +44,7 @@ interface ReviewRow {
 
 interface PlatformStats {
   total: number;
+  fetchedTotal: number;        // reviews 테이블 실제 수집 건수
   sentimentCount: Record<Sentiment, number>;
   sortedCategories: [string, number][];
   topKeywords: string[];
@@ -151,6 +152,7 @@ async function getPlatformStats(
 
   return {
     total: rows.length,
+    fetchedTotal: reviewRows.length,
     sentimentCount,
     sortedCategories,
     topKeywords,
@@ -204,7 +206,15 @@ function SentimentColumn({
         {isIos ? <Smartphone size={12} /> : <Play size={12} />}
         {isIos ? "iOS" : "Android"}
         {stats && (
-          <span className="ml-auto font-normal text-zinc-400">{stats.total}건</span>
+          <span className="ml-auto font-normal text-zinc-400 flex items-center gap-1">
+            <span>{stats.total}건 분석</span>
+            {stats.fetchedTotal > stats.total && (
+              <>
+                <span className="text-zinc-300">/</span>
+                <span className="text-zinc-300">{stats.fetchedTotal}건 수집</span>
+              </>
+            )}
+          </span>
         )}
       </div>
       {stats ? (
@@ -374,7 +384,25 @@ async function Dashboard({ game_id }: { game_id: string }) {
                 </Badge>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                iOS {ios ? `${ios.total}건` : "데이터 없음"} · Android {android ? `${android.total}건` : "데이터 없음"}
+                iOS{" "}
+                {ios ? (
+                  <span title={`수집 ${ios.fetchedTotal}건 중 ${ios.total}건 분석`}>
+                    {ios.total}건
+                    {ios.fetchedTotal > ios.total && (
+                      <span className="text-zinc-300 ml-1">/ {ios.fetchedTotal}건 수집</span>
+                    )}
+                  </span>
+                ) : "데이터 없음"}
+                {" · "}
+                Android{" "}
+                {android ? (
+                  <span title={`수집 ${android.fetchedTotal}건 중 ${android.total}건 분석`}>
+                    {android.total}건
+                    {android.fetchedTotal > android.total && (
+                      <span className="text-zinc-300 ml-1">/ {android.fetchedTotal}건 수집</span>
+                    )}
+                  </span>
+                ) : "데이터 없음"}
               </p>
             </div>
           </div>
