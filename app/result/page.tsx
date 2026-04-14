@@ -333,6 +333,23 @@ function CategoryComparison({
   );
 }
 
+// ─── Version alert helper ─────────────────────────────────────────────────────
+interface VersionAlert { version: string; prev: string; change: number; }
+
+function getVersionAlerts(trend: VersionTrendData[]): VersionAlert[] {
+  if (trend.length < 2) return [];
+  const alerts: VersionAlert[] = [];
+  for (let i = 1; i < trend.length; i++) {
+    const prev = trend[i - 1];
+    const curr = trend[i];
+    const prevPct = prev.total > 0 ? Math.round((prev.positive / prev.total) * 100) : 0;
+    const currPct = curr.total > 0 ? Math.round((curr.positive / curr.total) * 100) : 0;
+    const change = currPct - prevPct;
+    if (Math.abs(change) >= 10) alerts.push({ version: curr.version, prev: prev.version, change });
+  }
+  return alerts;
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 async function Dashboard({ game_id }: { game_id: string }) {
   const game = SUPERCENT_GAMES.find((g) => g.id === game_id);
@@ -388,6 +405,11 @@ async function Dashboard({ game_id }: { game_id: string }) {
   ].sort(
     (a, b) => new Date(b.review_date).getTime() - new Date(a.review_date).getTime()
   );
+
+  // 버전 릴리즈 알림 (±10%p 이상 변동)
+  const iosAlerts = getVersionAlerts(ios?.versionTrend ?? []);
+  const androidAlerts = getVersionAlerts(android?.versionTrend ?? []);
+  const allAlerts = [...iosAlerts.map((a) => ({ ...a, platform: "iOS" })), ...androidAlerts.map((a) => ({ ...a, platform: "Android" }))];
 
   // 긍정률 비교
   const iosPct = ios ? Math.round((ios.sentimentCount.positive / ios.total) * 100) : null;
@@ -512,6 +534,35 @@ async function Dashboard({ game_id }: { game_id: string }) {
                     </ul>
                   </CardContent>
                 </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 버전 릴리즈 알림 */}
+        {allAlerts.length > 0 && (
+          <div className="space-y-2">
+            {allAlerts.map((alert, i) => {
+              const isUp = alert.change > 0;
+              return (
+                <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs ${
+                  isUp
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-800"
+                }`}>
+                  {isUp ? <TrendingUp size={13} /> : <AlertCircle size={13} />}
+                  <span>
+                    <span className="font-semibold">{alert.platform} v{alert.version}</span>
+                    {" "}업데이트 후 긍정률{" "}
+                    <span className="font-bold">{isUp ? "+" : ""}{alert.change}%p {isUp ? "상승" : "하락"}</span>
+                    <span className="opacity-60 ml-1">(v{alert.prev} 대비)</span>
+                  </span>
+                  <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    isUp ? "bg-emerald-100 border-emerald-300 text-emerald-700" : "bg-rose-100 border-rose-300 text-rose-700"
+                  }`}>
+                    {isUp ? "호반응" : "급락 주의"}
+                  </span>
+                </div>
               );
             })}
           </div>
