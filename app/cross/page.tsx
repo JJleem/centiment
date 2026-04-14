@@ -18,6 +18,8 @@ import {
 import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
 import GameIcon from "@/components/GameIcon";
 import { buildCrossComparePrompt } from "@/lib/prompts/analyze";
+import { supabaseAdmin } from "@/lib/supabase";
+import ReanalyzeCrossButton from "@/components/ReanalyzeCrossButton";
 import type { Sentiment, ReviewCategory } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,7 +77,20 @@ async function getGameStats(game: GamePreset): Promise<GameStats | null> {
   return { game, total: rows.length, sentimentCount, sortedCategories, topKeywords };
 }
 
-async function getCrossInsight(stats1: GameStats, stats2: GameStats): Promise<string> {
+async function getOrCreateCrossInsight(g1: string, g2: string, stats1: GameStats, stats2: GameStats): Promise<string> {
+  // DB에서 기존 인사이트 조회
+  const { data } = await supabaseAdmin
+    .from("cross_comparison_history")
+    .select("insight")
+    .eq("game1_id", g1)
+    .eq("game2_id", g2)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (data?.insight) return data.insight;
+
+  // 없으면 Sonnet 생성 후 저장
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const toInput = (s: GameStats) => ({
     name: s.game.name,
@@ -91,7 +106,17 @@ async function getCrossInsight(stats1: GameStats, stats2: GameStats): Promise<st
     messages: [{ role: "user", content: buildCrossComparePrompt(toInput(stats1), toInput(stats2)) }],
   });
   console.log(`[cross][sonnet] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`);
-  return res.content[0].type === "text" ? res.content[0].text.trim() : "";
+  const insight = res.content[0].type === "text" ? res.content[0].text.trim() : "";
+
+  await supabaseAdmin.from("cross_comparison_history").insert({
+    game1_id: g1,
+    game2_id: g2,
+    game1_name: stats1.game.name,
+    game2_name: stats2.game.name,
+    insight,
+  });
+
+  return insight;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -214,11 +239,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
 
   // AI 크로스 인사이트 (두 게임 모두 데이터 있을 때만)
   const crossInsight = stats1 && stats2
-    ? await unstable_cache(
-        () => getCrossInsight(stats1, stats2),
-        [`cross-insight-v2-${g1}-${g2}`],
-        { revalidate: 3600 }
-      )()
+    ? await getOrCreateCrossInsight(g1, g2, stats1, stats2)
     : null;
 
   // 공통 키워드
@@ -269,6 +290,7 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
               <div className="flex items-start gap-2">
                 <Sparkles size={14} className="text-amber-500 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-900 leading-relaxed">{crossInsight}</p>
+                <ReanalyzeCrossButton g1={g1} g2={g2} />
               </div>
             </CardContent>
           </Card>

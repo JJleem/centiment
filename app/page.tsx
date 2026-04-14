@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SUPERCENT_GAMES, GENRES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
+import CrossHistorySection from "@/components/CrossHistorySection";
 import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
 import {
@@ -469,6 +470,7 @@ export default function HomePage() {
           </div>
         </section>
 
+        <CrossHistorySection />
         <HistorySection />
       </div>
     </main>
