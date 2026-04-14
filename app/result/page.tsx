@@ -50,6 +50,7 @@ interface PlatformStats {
   sentimentCount: Record<Sentiment, number>;
   sortedCategories: [string, number][];
   topKeywords: string[];
+  sellingKeywords: string[];   // 긍정 리뷰 전용 키워드 (셀링포인트)
   summary: string;
   issues: string[];
   versionTrend: VersionTrendData[];
@@ -109,6 +110,18 @@ async function getPlatformStats(
   const topKeywords = Object.entries(kwFreq)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15)
+    .map(([kw]) => kw);
+
+  // 긍정 리뷰 전용 키워드 집계 (셀링포인트)
+  const posKwFreq: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.sentiment === "positive") {
+      for (const kw of r.keywords) posKwFreq[kw] = (posKwFreq[kw] ?? 0) + 1;
+    }
+  }
+  const sellingKeywords = Object.entries(posKwFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
     .map(([kw]) => kw);
 
   // 버전별 감성 트렌드
@@ -175,6 +188,7 @@ async function getPlatformStats(
     sentimentCount,
     sortedCategories,
     topKeywords,
+    sellingKeywords,
     summary: rows[0].summary,
     issues: rows[0].issues ?? [],
     versionTrend,
@@ -697,6 +711,43 @@ async function Dashboard({ game_id }: { game_id: string }) {
             <AnalysisTimeline gameId={game_id} />
           </CardContent>
         </Card>
+
+        {/* 셀링포인트 */}
+        {((ios?.sellingKeywords?.length ?? 0) > 0 || (android?.sellingKeywords?.length ?? 0) > 0) && (
+          <Card className="border-emerald-100 bg-emerald-50/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5 text-emerald-700">
+                <TrendingUp size={13} /> 셀링포인트 — 유저가 자주 언급한 장점
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[{ stats: ios, label: "iOS", icon: <Smartphone size={11} />, color: "sky" }, { stats: android, label: "Android", icon: <Play size={11} />, color: "teal" }].map(({ stats, label, icon }) =>
+                  stats && (stats.sellingKeywords?.length ?? 0) > 0 ? (
+                    <div key={label}>
+                      <p className={`text-xs font-semibold ${label === "iOS" ? "text-sky-600" : "text-teal-600"} flex items-center gap-1 mb-2`}>
+                        {icon} {label}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {stats.sellingKeywords.map((kw, i) => (
+                          <span key={kw} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                            i === 0 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
+                            i <= 2  ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                      "bg-white text-emerald-600 border-emerald-100"
+                          }`}>
+                            {i < 3 && <span className="text-[9px] font-bold text-emerald-400">#{i + 1}</span>}
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-3">긍정 리뷰에서 추출한 키워드 — 마케팅 카피 소재로 활용하세요</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 키워드 비교 + 리뷰 드릴다운 (클라이언트 컴포넌트) */}
         <KeywordDrilldown
