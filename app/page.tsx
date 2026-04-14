@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { SUPERCENT_GAMES, type GamePreset } from "@/lib/presets";
+import { SUPERCENT_GAMES, GENRES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
 import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
@@ -22,7 +22,6 @@ type PlatformPhase = "idle" | "classifying" | "summarizing" | "done";
 interface PlatformProgress { phase: PlatformPhase; batchDone: number; batchTotal: number; }
 const INIT_PROGRESS: PlatformProgress = { phase: "idle", batchDone: 0, batchTotal: 0 };
 
-const GENRES = ["전체", "타이쿤", "캐주얼", "RPG", "레이싱"] as const;
 
 function formatCount(n: number): string {
   if (n >= 10000) return `${Math.floor(n / 10000)}만+`;

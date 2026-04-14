@@ -277,3 +277,11 @@ export const SUPERCENT_GAMES: GamePreset[] = [
     android_package: "io.supercent.bulldozermasters",
   },
 ];
+
+// 게임 데이터에서 장르 목록 자동 추출 (중복 제거, 가나다 정렬)
+export const GENRES = [
+  "전체",
+  ...[...new Set(SUPERCENT_GAMES.map((g) => g.genre))].sort((a, b) =>
+    a.localeCompare(b, "ko")
+  ),
+] as const;
