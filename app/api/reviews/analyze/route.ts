@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin as supabase } from "@/lib/supabase";
 import { buildClassifyPrompt, buildSummaryPrompt } from "@/lib/prompts/analyze";
@@ -219,6 +220,7 @@ export async function POST(req: NextRequest) {
         const { error: insertErr } = await supabase.from("review_analysis").insert(records);
         if (insertErr) throw new Error(insertErr.message);
 
+        revalidateTag(`analysis-${app_id}`, {});
         console.log(`[analyze][force] done — total:${rows.length} | haiku:${JSON.stringify(usage.haiku)} | sonnet:${JSON.stringify(usage.sonnet)}`);
         await send({ type: "done", analyzed: rows.length });
         return;
@@ -322,6 +324,7 @@ export async function POST(req: NextRequest) {
         .eq("app_id", app_id)
         .eq("platform", platform);
 
+      revalidateTag(`analysis-${app_id}`, {});
       console.log(`[analyze][incremental] done — new:${unanalyzed.length} | haiku:${JSON.stringify(usage.haiku)} | sonnet:${JSON.stringify(usage.sonnet)}`);
       await send({ type: "done", analyzed: unanalyzed.length });
     } catch (e) {

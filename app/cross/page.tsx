@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -157,8 +158,16 @@ async function CrossDashboard({ g1, g2 }: { g1: string; g2: string }) {
   }
 
   const [stats1, stats2] = await Promise.all([
-    getGameStats(game1),
-    getGameStats(game2),
+    unstable_cache(
+      () => getGameStats(game1),
+      [`game-stats-${game1.id}`],
+      { revalidate: 3600, tags: [`analysis-${game1.ios_app_id}`, `analysis-${game1.android_package}`] }
+    )(),
+    unstable_cache(
+      () => getGameStats(game2),
+      [`game-stats-${game2.id}`],
+      { revalidate: 3600, tags: [`analysis-${game2.ios_app_id}`, `analysis-${game2.android_package}`] }
+    )(),
   ]);
 
   if (!stats1 && !stats2) {

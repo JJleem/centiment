@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -293,8 +294,16 @@ async function Dashboard({ game_id }: { game_id: string }) {
   }
 
   const [ios, android] = await Promise.all([
-    getPlatformStats(game.ios_app_id, "ios"),
-    getPlatformStats(game.android_package, "android"),
+    unstable_cache(
+      () => getPlatformStats(game.ios_app_id, "ios"),
+      [`platform-stats-${game.ios_app_id}-ios`],
+      { revalidate: 3600, tags: [`analysis-${game.ios_app_id}`] }
+    )(),
+    unstable_cache(
+      () => getPlatformStats(game.android_package, "android"),
+      [`platform-stats-${game.android_package}-android`],
+      { revalidate: 3600, tags: [`analysis-${game.android_package}`] }
+    )(),
   ]);
 
   if (!ios && !android) {
