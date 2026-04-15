@@ -6,6 +6,7 @@ import { SUPERCENT_GAMES, GENRES, type GamePreset } from "@/lib/presets";
 import HistorySection from "@/components/HistorySection";
 import CrossHistorySection from "@/components/CrossHistorySection";
 import WeeklySummaryCards from "@/components/WeeklySummaryCards";
+import BatchAnalyzeSection from "@/components/BatchAnalyzeSection";
 import GameIcon from "@/components/GameIcon";
 import Link from "next/link";
 import {
@@ -602,9 +603,12 @@ export default function HomePage() {
         </div>
 
         {/* ── History (full width below) ────────────────────────────────────── */}
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <CrossHistorySection />
-          <HistorySection />
+        <div className="mt-12 space-y-8">
+          <BatchAnalyzeSection />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <CrossHistorySection />
+            <HistorySection />
+          </div>
         </div>
 
       </div>
