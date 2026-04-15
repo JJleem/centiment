@@ -14,6 +14,8 @@ import {
   MessageSquare,
   BarChart2,
   Bug,
+  Sparkles,
+  Tag,
 } from "lucide-react";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import GameIcon from "@/components/GameIcon";
@@ -420,425 +422,271 @@ async function Dashboard({ game_id }: { game_id: string }) {
     ? `${iosPct > androidPct ? "iOS" : "Android"}가 긍정률 ${Math.abs(iosPct - androidPct)}%p 더 높음`
     : null;
 
-  return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-10">
-      <div className="max-w-4xl mx-auto space-y-6">
+  // 통합 긍정률
+  const combinedTotal = (ios?.total ?? 0) + (android?.total ?? 0);
+  const combinedPositive = (ios?.sentimentCount.positive ?? 0) + (android?.sentimentCount.positive ?? 0);
+  const combinedPct = combinedTotal > 0 ? Math.round((combinedPositive / combinedTotal) * 100) : null;
+  const pctColor = combinedPct === null ? "text-zinc-400" : combinedPct >= 70 ? "text-emerald-600" : combinedPct >= 40 ? "text-amber-600" : "text-rose-600";
 
-        {/* 헤더 */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors mt-1">
-              <ArrowLeft size={20} />
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <GameIcon game={game} size={32} />
-                <h1 className="text-xl font-bold">{game.name}</h1>
-                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                  <Smartphone size={10} /> iOS
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                  <Play size={10} /> Android
-                </Badge>
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                iOS{" "}
-                {ios ? (
-                  <span title={`수집 ${ios.fetchedTotal}건 중 ${ios.total}건 분석`}>
-                    {ios.total}건
-                    {ios.fetchedTotal > ios.total && (
-                      <span className="text-zinc-300 ml-1">/ {ios.fetchedTotal}건 수집</span>
-                    )}
-                  </span>
-                ) : "데이터 없음"}
-                {" · "}
-                Android{" "}
-                {android ? (
-                  <span title={`수집 ${android.fetchedTotal}건 중 ${android.total}건 분석`}>
-                    {android.total}건
-                    {android.fetchedTotal > android.total && (
-                      <span className="text-zinc-300 ml-1">/ {android.fetchedTotal}건 수집</span>
-                    )}
-                  </span>
-                ) : "데이터 없음"}
-              </p>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/10">
+
+      {/* ── 헤더 ────────────────────────────────────────────────────────────── */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-zinc-100 sticky top-0 z-20 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center gap-4">
+          <Link href="/" className="text-zinc-400 hover:text-zinc-700 transition-colors shrink-0">
+            <ArrowLeft size={18} />
+          </Link>
+          <GameIcon game={game} size={36} className="rounded-xl shadow-sm shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base font-bold text-zinc-900 truncate">{game.name}</h1>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-medium">{game.genre}</span>
+              {ios && <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-600 border border-sky-100 flex items-center gap-0.5"><Smartphone size={9} /> iOS {ios.total}건</span>}
+              {android && <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-600 border border-teal-100 flex items-center gap-0.5"><Play size={9} /> Android {android.total}건</span>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {combinedPct !== null && (
+            <div className="hidden sm:flex items-baseline gap-1 shrink-0">
+              <span className={`text-2xl font-bold ${pctColor}`}>{combinedPct}%</span>
+              <span className="text-xs text-zinc-400">긍정률</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 shrink-0">
             <CsvExportButton items={allReviewItems} gameName={game.name} />
             <ReanalyzeButton game={game} />
           </div>
         </div>
+      </header>
 
-        {/* AI 인사이트 — 2열 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className={ios ? "border-sky-100 bg-sky-50/50" : "border-zinc-100"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-sky-600 flex items-center gap-1.5">
-                <MessageSquare size={12} /><Smartphone size={12} /> iOS AI 인사이트
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {ios?.summary
-                ? <p className="text-xs text-zinc-700 leading-relaxed">{ios.summary}</p>
-                : <p className="text-xs text-zinc-300 italic">
-                    {ios ? "요약 생성 중이거나 데이터가 부족합니다." : "데이터 없음"}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex gap-6 items-start">
+
+          {/* ── LEFT: 인사이트 영역 ─────────────────────────────────────────── */}
+          <div className="flex-1 min-w-0 space-y-5">
+
+            {/* 버전 릴리즈 알림 */}
+            {allAlerts.length > 0 && (
+              <div className="space-y-2">
+                {allAlerts.map((alert, i) => {
+                  const isUp = alert.change > 0;
+                  return (
+                    <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs ${
+                      isUp ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}>
+                      {isUp ? <TrendingUp size={13} /> : <AlertCircle size={13} />}
+                      <span>
+                        <span className="font-semibold">{alert.platform} v{alert.version}</span>
+                        {" "}업데이트 후 긍정률{" "}
+                        <span className="font-bold">{isUp ? "+" : ""}{alert.change}%p {isUp ? "상승" : "하락"}</span>
+                        <span className="opacity-60 ml-1">(v{alert.prev} 대비)</span>
+                      </span>
+                      <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        isUp ? "bg-emerald-100 border-emerald-300 text-emerald-700" : "bg-rose-100 border-rose-300 text-rose-700"
+                      }`}>
+                        {isUp ? "호반응" : "급락 주의"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* AI 인사이트 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { stats: ios, platform: "ios", accentBg: "from-sky-50 to-white", accent: "text-sky-600", border: "border-sky-100", icon: <Smartphone size={11} /> },
+                { stats: android, platform: "android", accentBg: "from-teal-50 to-white", accent: "text-teal-600", border: "border-teal-100", icon: <Play size={11} /> },
+              ].map(({ stats, platform, accentBg, accent, border, icon }) => (
+                <div key={platform} className={`bg-gradient-to-br ${accentBg} rounded-2xl border ${border} p-4 shadow-sm`}>
+                  <p className={`text-xs font-semibold ${accent} flex items-center gap-1.5 mb-2`}>
+                    <Sparkles size={11} /> {icon} {platform === "ios" ? "iOS" : "Android"} AI 인사이트
                   </p>
-              }
-            </CardContent>
-          </Card>
+                  {stats?.summary
+                    ? <p className="text-xs text-zinc-700 leading-relaxed">{stats.summary}</p>
+                    : <p className="text-xs text-zinc-300 italic">{stats ? "데이터 부족" : "데이터 없음"}</p>
+                  }
+                </div>
+              ))}
+            </div>
 
-          <Card className={android ? "border-teal-100 bg-teal-50/50" : "border-zinc-100"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-teal-600 flex items-center gap-1.5">
-                <MessageSquare size={12} /><Play size={12} /> Android AI 인사이트
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {android?.summary
-                ? <p className="text-xs text-zinc-700 leading-relaxed">{android.summary}</p>
-                : <p className="text-xs text-zinc-300 italic">
-                    {android ? "요약 생성 중이거나 데이터가 부족합니다." : "데이터 없음"}
-                  </p>
-              }
-            </CardContent>
-          </Card>
-        </div>
+            {/* 카테고리 세부 인사이트 */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-1.5">
+                  <BarChart2 size={13} /> 카테고리별 세부 인사이트
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CategoryInsights gameId={game_id} hasIos={!!ios} hasAndroid={!!android} />
+              </CardContent>
+            </Card>
 
-        {/* 카테고리별 세부 인사이트 (Haiku) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              <BarChart2 size={13} /> 카테고리별 세부 인사이트
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CategoryInsights
-              gameId={game_id}
-              hasIos={!!ios}
-              hasAndroid={!!android}
+            {/* 이슈 목록 */}
+            {((ios?.issues?.length ?? 0) > 0 || (android?.issues?.length ?? 0) > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {([{ stats: ios, platform: "ios" as const }, { stats: android, platform: "android" as const }]).map(({ stats, platform }) => {
+                  if (!stats || stats.issues.length === 0) return null;
+                  const isIos = platform === "ios";
+                  return (
+                    <Card key={platform} className={`shadow-sm ${isIos ? "border-rose-100 bg-rose-50/30" : "border-orange-100 bg-orange-50/30"}`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className={`text-xs flex items-center gap-1.5 ${isIos ? "text-rose-600" : "text-orange-600"}`}>
+                          <Bug size={12} /> {isIos ? <Smartphone size={11} /> : <Play size={11} />} {isIos ? "iOS" : "Android"} 주요 이슈
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1.5">
+                          {stats.issues.map((issue, i) => (
+                            <li key={i} className="flex items-center gap-2 text-xs text-zinc-700">
+                              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isIos ? "bg-rose-100 text-rose-600" : "bg-orange-100 text-orange-600"}`}>{i + 1}</span>
+                              {issue}
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 셀링포인트 */}
+            {((ios?.sellingKeywords?.length ?? 0) > 0 || (android?.sellingKeywords?.length ?? 0) > 0) && (
+              <Card className="border-emerald-100 bg-emerald-50/30 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-1.5 text-emerald-700">
+                    <Tag size={13} /> 셀링포인트 — 유저가 자주 언급한 장점
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {([{ stats: ios, label: "iOS", icon: <Smartphone size={11} />, isIos: true }, { stats: android, label: "Android", icon: <Play size={11} />, isIos: false }]).map(({ stats, label, icon, isIos }) =>
+                      stats && (stats.sellingKeywords?.length ?? 0) > 0 ? (
+                        <div key={label}>
+                          <p className={`text-xs font-semibold ${isIos ? "text-sky-600" : "text-teal-600"} flex items-center gap-1 mb-2`}>{icon} {label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {stats.sellingKeywords.map((kw, i) => (
+                              <span key={kw} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                i === 0 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
+                                i <= 2  ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                          "bg-white text-emerald-600 border-emerald-100"
+                              }`}>
+                                {i < 3 && <span className="text-[9px] font-bold text-emerald-400">#{i + 1}</span>}
+                                {kw}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-3">긍정 리뷰에서 추출한 키워드 — 마케팅 카피 소재로 활용하세요</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 키워드 드릴다운 + 리뷰 목록 */}
+            <KeywordDrilldown
+              iosKeywords={ios?.topKeywords ?? []}
+              androidKeywords={android?.topKeywords ?? []}
+              allItems={allReviewItems}
             />
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* 이슈 목록 — iOS / Android 각각 버그가 있을 때만 */}
-        {((ios?.issues?.length ?? 0) > 0 || (android?.issues?.length ?? 0) > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { stats: ios, platform: "ios" as const },
-              { stats: android, platform: "android" as const },
-            ].map(({ stats, platform }) => {
-              if (!stats || stats.issues.length === 0) return null;
-              const isIos = platform === "ios";
-              return (
-                <Card key={platform} className={isIos ? "border-rose-100 bg-rose-50/40" : "border-orange-100 bg-orange-50/40"}>
+          {/* ── RIGHT: 통계 사이드바 ─────────────────────────────────────────── */}
+          <div className="hidden lg:block w-72 xl:w-80 shrink-0">
+            <div className="sticky top-24 space-y-4">
+
+              {/* 감성 비교 */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-zinc-500">감성 분석</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <SentimentColumn stats={ios} platform="ios" />
+                  <SentimentColumn stats={android} platform="android" />
+                  {diffMsg && (
+                    <p className={`text-[11px] text-center font-medium ${iosPct! > androidPct! ? "text-sky-600" : "text-teal-600"}`}>{diffMsg}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 평점 분포 */}
+              {(ios || android) && (
+                <Card className="shadow-sm">
                   <CardHeader className="pb-2">
-                    <CardTitle className={`text-xs flex items-center gap-1.5 ${isIos ? "text-rose-600" : "text-orange-600"}`}>
-                      <Bug size={12} />
-                      {isIos ? <Smartphone size={12} /> : <Play size={12} />}
-                      {isIos ? "iOS" : "Android"} 주요 이슈
-                    </CardTitle>
+                    <CardTitle className="text-xs text-zinc-500 flex items-center gap-1"><span className="text-amber-400">★</span> 평점 분포</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-1.5">
-                      {stats.issues.map((issue, i) => (
-                        <li key={i} className="flex items-center gap-2 text-xs text-zinc-700">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isIos ? "bg-rose-100 text-rose-600" : "bg-orange-100 text-orange-600"}`}>
-                            {i + 1}
-                          </span>
-                          {issue}
-                        </li>
-                      ))}
-                    </ul>
+                  <CardContent className="space-y-4">
+                    {ios && <div><p className="text-[10px] font-semibold text-sky-600 flex items-center gap-1 mb-2"><Smartphone size={9} /> iOS</p><RatingDistChart dist={ios.ratingDist} total={ios.total} color="sky" /></div>}
+                    {android && <div><p className="text-[10px] font-semibold text-teal-600 flex items-center gap-1 mb-2"><Play size={9} /> Android</p><RatingDistChart dist={android.ratingDist} total={android.total} color="teal" /></div>}
                   </CardContent>
                 </Card>
-              );
-            })}
-          </div>
-        )}
+              )}
 
-        {/* 버전 릴리즈 알림 */}
-        {allAlerts.length > 0 && (
-          <div className="space-y-2">
-            {allAlerts.map((alert, i) => {
-              const isUp = alert.change > 0;
-              return (
-                <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs ${
-                  isUp
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "bg-rose-50 border-rose-200 text-rose-800"
-                }`}>
-                  {isUp ? <TrendingUp size={13} /> : <AlertCircle size={13} />}
-                  <span>
-                    <span className="font-semibold">{alert.platform} v{alert.version}</span>
-                    {" "}업데이트 후 긍정률{" "}
-                    <span className="font-bold">{isUp ? "+" : ""}{alert.change}%p {isUp ? "상승" : "하락"}</span>
-                    <span className="opacity-60 ml-1">(v{alert.prev} 대비)</span>
-                  </span>
-                  <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                    isUp ? "bg-emerald-100 border-emerald-300 text-emerald-700" : "bg-rose-100 border-rose-300 text-rose-700"
-                  }`}>
-                    {isUp ? "호반응" : "급락 주의"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+              {/* 카테고리 비교 */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-zinc-500">카테고리별 비교</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {ios || android ? <CategoryComparison ios={ios} android={android} /> : <p className="text-xs text-zinc-300 text-center py-4">데이터 없음</p>}
+                </CardContent>
+              </Card>
 
-        {/* 감성 비교 */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">감성 분석 비교</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SentimentColumn stats={ios} platform="ios" />
-              <SentimentColumn stats={android} platform="android" />
+              {/* 국가별 감성 */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-zinc-500">🌍 국가별 감성</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <LangSentimentChart gameId={game_id} hasIos={!!ios} hasAndroid={!!android} />
+                </CardContent>
+              </Card>
+
+              {/* 버전별 트렌드 */}
+              {(ios || android) && (
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs text-zinc-500 flex items-center gap-1"><TrendingUp size={11} /> 버전별 트렌드</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {ios && <div><p className="text-[10px] font-semibold text-sky-600 flex items-center gap-1 mb-2"><Smartphone size={9} /> iOS</p>{ios.versionTrend.length >= 2 ? <VersionTrendChart data={ios.versionTrend} /> : <p className="text-[10px] text-zinc-300 text-center py-3">버전 2개 이상 필요</p>}</div>}
+                    {android && <div><p className="text-[10px] font-semibold text-teal-600 flex items-center gap-1 mb-2"><Play size={9} /> Android</p>{android.versionTrend.length >= 2 ? <VersionTrendChart data={android.versionTrend} /> : <p className="text-[10px] text-zinc-300 text-center py-3">버전 2개 이상 필요</p>}</div>}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 월별 트렌드 */}
+              {(ios || android) && (
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs text-zinc-500 flex items-center gap-1"><TrendingUp size={11} /> 월별 트렌드</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {ios && <div><p className="text-[10px] font-semibold text-sky-600 flex items-center gap-1 mb-2"><Smartphone size={9} /> iOS</p>{(ios.dateTrend ?? []).length >= 2 ? <VersionTrendChart data={ios.dateTrend ?? []} /> : <p className="text-[10px] text-zinc-300 text-center py-3">2개월 이상 필요</p>}</div>}
+                    {android && <div><p className="text-[10px] font-semibold text-teal-600 flex items-center gap-1 mb-2"><Play size={9} /> Android</p>{(android.dateTrend ?? []).length >= 2 ? <VersionTrendChart data={android.dateTrend ?? []} /> : <p className="text-[10px] text-zinc-300 text-center py-3">2개월 이상 필요</p>}</div>}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 분석 이력 타임라인 */}
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs text-zinc-500">분석 이력</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <AnalysisTimeline gameId={game_id} />
+                </CardContent>
+              </Card>
+
             </div>
-            {diffMsg && (
-              <p className={`text-xs text-center ${iosPct! > androidPct! ? "text-sky-600" : "text-teal-600"}`}>
-                <span className="font-semibold">{diffMsg}</span>
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* 평점 분포 */}
-        {(ios || android) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-1.5">
-                <span className="text-amber-400">★</span> 평점 분포
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
-                    <Smartphone size={11} /> iOS
-                    {ios && <span className="ml-auto font-normal text-zinc-400">{ios.total}건</span>}
-                  </p>
-                  {ios ? (
-                    <RatingDistChart dist={ios.ratingDist} total={ios.total} color="sky" />
-                  ) : (
-                    <p className="text-xs text-zinc-300 text-center py-4">분석 데이터 없음</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
-                    <Play size={11} /> Android
-                    {android && <span className="ml-auto font-normal text-zinc-400">{android.total}건</span>}
-                  </p>
-                  {android ? (
-                    <RatingDistChart dist={android.ratingDist} total={android.total} color="teal" />
-                  ) : (
-                    <p className="text-xs text-zinc-300 text-center py-4">분석 데이터 없음</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 카테고리 비교 */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">카테고리별 비교</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {ios || android ? (
-              <CategoryComparison ios={ios} android={android} />
-            ) : (
-              <p className="text-xs text-zinc-300 text-center py-6">카테고리 데이터가 없습니다.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 국가별 감성 분포 */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              🌍 국가별 감성 분포
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LangSentimentChart gameId={game_id} hasIos={!!ios} hasAndroid={!!android} />
-          </CardContent>
-        </Card>
-
-        {/* 월별 감성 트렌드 */}
-        {(ios || android) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-1.5">
-                <TrendingUp size={13} /> 월별 감성 트렌드
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
-                    <Smartphone size={11} /> iOS
-                  </p>
-                  {ios && (ios.dateTrend ?? []).length >= 2 ? (
-                    <VersionTrendChart data={ios.dateTrend ?? []} />
-                  ) : (
-                    <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
-                      {ios ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
-                      {ios && (ios.dateTrend ?? []).length < 2 && (
-                        <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
-                    <Play size={11} /> Android
-                  </p>
-                  {android && (android.dateTrend ?? []).length >= 2 ? (
-                    <VersionTrendChart data={android.dateTrend ?? []} />
-                  ) : (
-                    <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
-                      {android ? "월별 데이터가 부족합니다" : "분석 데이터 없음"}
-                      {android && (android.dateTrend ?? []).length < 2 && (
-                        <span className="block text-zinc-300 text-[11px] mt-1">트렌드 표시에는 최소 2개월이 필요합니다</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 버전별 감성 트렌드 */}
-        {(ios || android) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-1.5">
-                <TrendingUp size={13} /> 버전별 감성 트렌드
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* iOS */}
-                {ios ? (
-                  <div>
-                    <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
-                      <Smartphone size={11} /> iOS
-                    </p>
-                    {ios.versionTrend.length >= 2 ? (
-                      <VersionTrendChart data={ios.versionTrend} />
-                    ) : (
-                      <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
-                        버전 데이터가 부족합니다
-                        <span className="block text-zinc-300 text-[11px] mt-1">
-                          트렌드 표시에는 최소 2개 버전이 필요합니다
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs font-semibold text-sky-600 flex items-center gap-1 mb-3">
-                      <Smartphone size={11} /> iOS
-                    </p>
-                    <p className="text-xs text-zinc-300 text-center py-6 border border-dashed border-zinc-100 rounded-lg">
-                      분석 데이터 없음
-                    </p>
-                  </div>
-                )}
-                {/* Android */}
-                {android ? (
-                  <div>
-                    <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
-                      <Play size={11} /> Android
-                    </p>
-                    {android.versionTrend.length >= 2 ? (
-                      <VersionTrendChart data={android.versionTrend} />
-                    ) : (
-                      <p className="text-xs text-zinc-400 text-center py-6 border border-dashed border-zinc-200 rounded-lg">
-                        버전 데이터가 부족합니다
-                        <span className="block text-zinc-300 text-[11px] mt-1">
-                          트렌드 표시에는 최소 2개 버전이 필요합니다
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs font-semibold text-teal-600 flex items-center gap-1 mb-3">
-                      <Play size={11} /> Android
-                    </p>
-                    <p className="text-xs text-zinc-300 text-center py-6 border border-dashed border-zinc-100 rounded-lg">
-                      분석 데이터 없음
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 분석 이력 타임라인 */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              <TrendingUp size={13} /> 분석 이력 타임라인
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AnalysisTimeline gameId={game_id} />
-          </CardContent>
-        </Card>
-
-        {/* 셀링포인트 */}
-        {((ios?.sellingKeywords?.length ?? 0) > 0 || (android?.sellingKeywords?.length ?? 0) > 0) && (
-          <Card className="border-emerald-100 bg-emerald-50/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-1.5 text-emerald-700">
-                <TrendingUp size={13} /> 셀링포인트 — 유저가 자주 언급한 장점
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[{ stats: ios, label: "iOS", icon: <Smartphone size={11} />, color: "sky" }, { stats: android, label: "Android", icon: <Play size={11} />, color: "teal" }].map(({ stats, label, icon }) =>
-                  stats && (stats.sellingKeywords?.length ?? 0) > 0 ? (
-                    <div key={label}>
-                      <p className={`text-xs font-semibold ${label === "iOS" ? "text-sky-600" : "text-teal-600"} flex items-center gap-1 mb-2`}>
-                        {icon} {label}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {stats.sellingKeywords.map((kw, i) => (
-                          <span key={kw} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-                            i === 0 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
-                            i <= 2  ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                      "bg-white text-emerald-600 border-emerald-100"
-                          }`}>
-                            {i < 3 && <span className="text-[9px] font-bold text-emerald-400">#{i + 1}</span>}
-                            {kw}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null
-                )}
-              </div>
-              <p className="text-[10px] text-zinc-400 mt-3">긍정 리뷰에서 추출한 키워드 — 마케팅 카피 소재로 활용하세요</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 키워드 비교 + 리뷰 드릴다운 (클라이언트 컴포넌트) */}
-        <KeywordDrilldown
-          iosKeywords={ios?.topKeywords ?? []}
-          androidKeywords={android?.topKeywords ?? []}
-          allItems={allReviewItems}
-        />
-
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
 
