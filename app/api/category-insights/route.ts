@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase";
 import { SUPERCENT_GAMES } from "@/lib/presets";
 import { buildCategoryInsightPrompt } from "@/lib/prompts/analyze";
-import type { Platform, Sentiment, ReviewCategory } from "@/types";
+import type { Platform, ReviewCategory } from "@/types";
 
 const CATEGORY_LABEL: Record<ReviewCategory, string> = {
   gameplay: "게임플레이", ui: "UI/UX", performance: "성능",
   monetization: "결제/광고", content: "콘텐츠", bug: "버그", other: "기타",
 };
-
-// 인사이트 생성 대상 카테고리 (other 제외)
 const TARGET_CATEGORIES: ReviewCategory[] = ["bug", "monetization", "gameplay", "performance", "ui", "content"];
 
 function getSupabase() {
@@ -27,22 +26,13 @@ export interface CategoryInsight {
   insight: string;
 }
 
-export async function GET(req: NextRequest) {
-  const gameId = req.nextUrl.searchParams.get("game");
-  const platform = req.nextUrl.searchParams.get("platform") as Platform | null;
-  if (!gameId || !platform) return NextResponse.json({ insights: [] });
-
-  const game = SUPERCENT_GAMES.find((g) => g.id === gameId);
-  if (!game) return NextResponse.json({ insights: [] });
-
-  const appId = platform === "ios" ? game.ios_app_id : game.android_package;
+async function generateAndSave(appId: string, platform: Platform): Promise<CategoryInsight[]> {
   const supabase = getSupabase();
 
-  // review_analysis + reviews 페어링 (result page와 동일한 방식)
   const [{ data: analyses }, { data: reviews }] = await Promise.all([
     supabase
       .from("review_analysis")
-      .select("sentiment, category, keywords")
+      .select("category")
       .eq("app_id", appId)
       .eq("platform", platform)
       .order("created_at", { ascending: false }),
@@ -54,9 +44,8 @@ export async function GET(req: NextRequest) {
       .order("review_date", { ascending: false }),
   ]);
 
-  if (!analyses || analyses.length === 0) return NextResponse.json({ insights: [] });
+  if (!analyses || analyses.length === 0) return [];
 
-  // 카테고리별 리뷰 내용 그룹핑
   const categoryContents: Partial<Record<ReviewCategory, string[]>> = {};
   analyses.forEach((row, i) => {
     const cat = row.category as ReviewCategory;
@@ -65,13 +54,12 @@ export async function GET(req: NextRequest) {
     if (content) categoryContents[cat]!.push(content);
   });
 
-  // 건수 기준 상위 카테고리 (최대 3개, other 제외)
   const topCats = TARGET_CATEGORIES
     .filter((c) => (categoryContents[c]?.length ?? 0) >= 3)
     .sort((a, b) => (categoryContents[b]?.length ?? 0) - (categoryContents[a]?.length ?? 0))
     .slice(0, 3);
 
-  if (topCats.length === 0) return NextResponse.json({ insights: [] });
+  if (topCats.length === 0) return [];
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -89,5 +77,53 @@ export async function GET(req: NextRequest) {
     })
   );
 
+  // 기존 삭제 후 새로 저장
+  await supabaseAdmin
+    .from("category_insights")
+    .delete()
+    .eq("app_id", appId)
+    .eq("platform", platform);
+
+  await supabaseAdmin.from("category_insights").insert(
+    insights.map((item) => ({
+      app_id: appId,
+      platform,
+      category: item.category,
+      label: item.label,
+      count: item.count,
+      insight: item.insight,
+    }))
+  );
+
+  return insights;
+}
+
+export async function GET(req: NextRequest) {
+  const gameId = req.nextUrl.searchParams.get("game");
+  const platform = req.nextUrl.searchParams.get("platform") as Platform | null;
+  const force = req.nextUrl.searchParams.get("force") === "true";
+  if (!gameId || !platform) return NextResponse.json({ insights: [] });
+
+  const game = SUPERCENT_GAMES.find((g) => g.id === gameId);
+  if (!game) return NextResponse.json({ insights: [] });
+
+  const appId = platform === "ios" ? game.ios_app_id : game.android_package;
+
+  // force가 아니면 DB에서 먼저 조회
+  if (!force) {
+    const { data } = await supabaseAdmin
+      .from("category_insights")
+      .select("category, label, count, insight")
+      .eq("app_id", appId)
+      .eq("platform", platform)
+      .order("created_at", { ascending: false });
+
+    if (data && data.length > 0) {
+      return NextResponse.json({ insights: data as CategoryInsight[], cached: true });
+    }
+  }
+
+  // 없거나 force면 생성
+  const insights = await generateAndSave(appId, platform);
   return NextResponse.json({ insights });
 }
