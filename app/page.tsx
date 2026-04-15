@@ -541,8 +541,8 @@ export default function HomePage() {
               </div>
 
               {/* Compare panel */}
-              <div className="bg-white rounded-3xl shadow-xl shadow-zinc-200/60 border border-zinc-100 overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-zinc-50 flex items-center gap-2">
+              <div className="bg-white rounded-3xl shadow-xl shadow-zinc-200/60 border border-zinc-100">
+                <div className="px-5 py-3.5 border-b border-zinc-50 flex items-center gap-2 rounded-t-3xl">
                   <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center">
                     <GitCompare size={11} className="text-violet-500" />
                   </div>
