@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Smartphone, Play, X } from "lucide-react";
+import { ChevronDown, Smartphone, Play, X, Search } from "lucide-react";
 import type { Sentiment, ReviewCategory, Platform } from "@/types";
 
 const PAGE_SIZE = 20;
@@ -122,17 +122,35 @@ export default function ReviewList({ items }: Props) {
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<Sentiment | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<ReviewCategory | "all">("all");
+  const [search, setSearch] = useState("");
   const [shown, setShown] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState<CombinedItem | null>(null);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return items.filter((item) => {
       if (platformFilter !== "all" && item.platform !== platformFilter) return false;
       if (sentimentFilter !== "all" && item.sentiment !== sentimentFilter) return false;
       if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (q && !item.content.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [items, platformFilter, sentimentFilter, categoryFilter]);
+  }, [items, platformFilter, sentimentFilter, categoryFilter, search]);
+
+  // 검색어 하이라이트
+  function highlight(text: string) {
+    const q = search.trim();
+    if (!q) return <>{text}</>;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return <>{text}</>;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">{text.slice(idx, idx + q.length)}</mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  }
 
   function resetPage() { setShown(PAGE_SIZE); }
 
@@ -141,6 +159,26 @@ export default function ReviewList({ items }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* 검색창 */}
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+        <input
+          type="text"
+          placeholder="리뷰 내용 검색..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+          className="w-full pl-8 pr-8 py-2 text-sm border border-zinc-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
+        />
+        {search && (
+          <button
+            onClick={() => { setSearch(""); resetPage(); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
       {/* 플랫폼 필터 */}
       <div className="flex gap-2">
         {(["all", "ios", "android"] as const).map((p) => {
@@ -272,7 +310,7 @@ export default function ReviewList({ items }: Props) {
                     </div>
                   </div>
                   <p className="text-sm text-zinc-700 leading-relaxed line-clamp-3">
-                    {item.content}
+                    {highlight(item.content)}
                   </p>
                   {item.keywords?.length > 0 && (
                     <div className="flex gap-1 mt-2">
