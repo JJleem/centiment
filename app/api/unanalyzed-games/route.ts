@@ -45,12 +45,17 @@ export async function GET() {
     countMap[row.app_id] = (countMap[row.app_id] ?? 0) + 1;
   }
 
+  // 로케일당 40건 × 4로케일 = 160건/플랫폼 (수집 예상 최대치)
+  const DEFAULT_PER_PLATFORM = 160;
+
   const games: UnanalyzedGame[] = unanalyzedGames.map((g) => {
-    const ios = countMap[g.ios_app_id] ?? 0;
-    const android = countMap[g.android_package] ?? 0;
+    const iosInDb = countMap[g.ios_app_id] ?? 0;
+    const androidInDb = countMap[g.android_package] ?? 0;
+    // DB에 있으면 실제 수, 없으면 기본 예상치 사용
+    const ios = iosInDb > 0 ? iosInDb : DEFAULT_PER_PLATFORM;
+    const android = androidInDb > 0 ? androidInDb : DEFAULT_PER_PLATFORM;
     const total = ios + android;
-    const platforms = (ios > 0 ? 1 : 0) + (android > 0 ? 1 : 0);
-    const cost = total * HAIKU_PER_REVIEW + platforms * SONNET_PER_PLATFORM;
+    const cost = total * HAIKU_PER_REVIEW + 2 * SONNET_PER_PLATFORM;
     return {
       game_id: g.id,
       name: g.name,
