@@ -29,30 +29,26 @@ export interface CategoryInsight {
 async function generateAndSave(appId: string, platform: Platform): Promise<CategoryInsight[]> {
   const supabase = getSupabase();
 
-  const [{ data: analyses }, { data: reviews }] = await Promise.all([
-    supabase
-      .from("review_analysis")
-      .select("category")
-      .eq("app_id", appId)
-      .eq("platform", platform)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("reviews")
-      .select("content")
-      .eq("app_id", appId)
-      .eq("platform", platform)
-      .order("review_date", { ascending: false }),
-  ]);
+  // review_id FK로 JOIN — 인덱스 기반 매칭 대신 정확한 페어링
+  const { data, error } = await supabase
+    .from("review_analysis")
+    .select("category, reviews!inner(content)")
+    .eq("app_id", appId)
+    .eq("platform", platform);
 
-  if (!analyses || analyses.length === 0) return [];
+  if (error) {
+    console.error("[category-insights] query error:", error.message);
+    return [];
+  }
+  if (!data || data.length === 0) return [];
 
   const categoryContents: Partial<Record<ReviewCategory, string[]>> = {};
-  analyses.forEach((row, i) => {
+  for (const row of data as { category: string; reviews: { content: string }[] }[]) {
     const cat = row.category as ReviewCategory;
     if (!categoryContents[cat]) categoryContents[cat] = [];
-    const content = (reviews ?? [])[i]?.content;
+    const content = row.reviews?.[0]?.content;
     if (content) categoryContents[cat]!.push(content);
-  });
+  }
 
   const topCats = TARGET_CATEGORIES
     .filter((c) => (categoryContents[c]?.length ?? 0) >= 3)
