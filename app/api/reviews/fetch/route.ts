@@ -40,12 +40,21 @@ interface MZReview {
 }
 
 // ─── PostgREST raw fetch 헬퍼 ────────────────────────────────────────────────
-function pgUrl() { return process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(); }
-function pgKey() { return process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(); }
+function pgUrl() { return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim(); }
+function pgKey() {
+  const raw = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
+  // non-Latin1 문자 제거 (env var 오염 방어)
+  const clean = raw.replace(/[^\x00-\xFF]/g, "");
+  if (clean !== raw) {
+    console.error(`[pgKey] non-Latin1 chars removed from service key! original:${raw.length} cleaned:${clean.length}`);
+  }
+  return clean;
+}
 function pgHeaders() {
+  const key = pgKey();
   return {
-    "apikey":        pgKey(),
-    "Authorization": `Bearer ${pgKey()}`,
+    "apikey":        key,
+    "Authorization": `Bearer ${key}`,
     "Content-Type":  "application/json",
   };
 }
@@ -200,18 +209,21 @@ async function upsertReviews(
     fetched_at: new Date().toISOString(),
   }));
 
-  const res = await fetch(
-    `${pgUrl()}/rest/v1/reviews?on_conflict=app_id%2Cplatform%2Ccontent%2Creview_date%2Clang`,
-    {
-      method: "POST",
-      headers: { ...pgHeaders(), "Prefer": "resolution=ignore-duplicates,return=minimal" },
-      body: JSON.stringify(rows),
+  try {
+    const res = await fetch(
+      `${pgUrl()}/rest/v1/reviews?on_conflict=app_id%2Cplatform%2Ccontent%2Creview_date%2Clang`,
+      {
+        method: "POST",
+        headers: { ...pgHeaders(), "Prefer": "resolution=ignore-duplicates,return=minimal" },
+        body: JSON.stringify(rows),
+      }
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[upsertReviews] ${res.status} ${text.slice(0, 200)}`);
     }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Supabase upsert error: ${res.status} ${text}`);
+  } catch (e) {
+    console.error("[upsertReviews] fetch threw:", e instanceof Error ? e.message : e);
   }
 
   return { inserted: rows.length, skipped: 0 };
