@@ -159,21 +159,39 @@ async function fetchAndroidReviews(packageName: string): Promise<ScrapedReview[]
 }
 
 // ─── DB upsert ────────────────────────────────────────────────────────────────
+// supabase-js 클라이언트 우회 — 한/일/중 문자가 content에 포함될 때
+// postgrest-js 내부에서 ByteString 오류가 발생하므로 raw fetch로 직접 호출
 async function upsertReviews(
   reviews: ScrapedReview[]
 ): Promise<{ inserted: number; skipped: number }> {
-  const rows = reviews.map((r) => ({ ...r, fetched_at: new Date().toISOString() }));
+  const rows = reviews.map((r) => ({
+    ...r,
+    // null byte 및 제어문자 제거 (DB 저장 안전성 확보)
+    content: r.content.replace(/\0/g, "").trim(),
+    fetched_at: new Date().toISOString(),
+  }));
 
-  // .select() 제거 — content 컬럼에 한/일/중문자 포함 시 PostgREST 응답 헤더
-  // 인코딩 과정에서 Latin-1 초과 문자 오류 발생 (ByteString 에러)
-  const { error } = await supabase
-    .from("reviews")
-    .upsert(rows, {
-      onConflict: "app_id,platform,content,review_date,lang",
-      ignoreDuplicates: true,
-    });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim();
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
 
-  if (error) throw new Error(`Supabase upsert error: ${error.message}`);
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/reviews?on_conflict=app_id%2Cplatform%2Ccontent%2Creview_date%2Clang`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey":        serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Prefer":        "resolution=ignore-duplicates,return=minimal",
+      },
+      body: JSON.stringify(rows),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase upsert error: ${res.status} ${text}`);
+  }
 
   return { inserted: rows.length, skipped: 0 };
 }
