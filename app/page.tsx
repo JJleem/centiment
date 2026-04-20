@@ -249,6 +249,14 @@ export default function HomePage() {
           </div>
           <span className="text-zinc-200 text-sm">|</span>
           <span className="hidden sm:block text-zinc-400 text-sm">Supercent 게임 리뷰 감성 분석</span>
+          <a
+            href="/plan.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+          >
+            기획서 확인하기
+          </a>
           {analyzedGames.length > 0 && (
             <span className="ml-auto text-[11px] text-zinc-400 hidden sm:flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
