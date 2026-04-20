@@ -164,18 +164,18 @@ async function upsertReviews(
 ): Promise<{ inserted: number; skipped: number }> {
   const rows = reviews.map((r) => ({ ...r, fetched_at: new Date().toISOString() }));
 
-  const { data, error } = await supabase
+  // .select() 제거 — content 컬럼에 한/일/중문자 포함 시 PostgREST 응답 헤더
+  // 인코딩 과정에서 Latin-1 초과 문자 오류 발생 (ByteString 에러)
+  const { error } = await supabase
     .from("reviews")
     .upsert(rows, {
       onConflict: "app_id,platform,content,review_date,lang",
       ignoreDuplicates: true,
-    })
-    .select("id");
+    });
 
   if (error) throw new Error(`Supabase upsert error: ${error.message}`);
 
-  const inserted = data?.length ?? 0;
-  return { inserted, skipped: reviews.length - inserted };
+  return { inserted: rows.length, skipped: 0 };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
