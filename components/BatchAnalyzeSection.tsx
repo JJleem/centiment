@@ -13,6 +13,27 @@ import type { UnanalyzedGame } from "@/app/api/unanalyzed-games/route";
 type GameStatus = "idle" | "fetching" | "analyzing" | "done" | "error";
 interface GameProgress { status: GameStatus; error?: string; }
 
+const CACHE_KEY = "centiment:unanalyzed-games";
+const CACHE_TTL = 10 * 60 * 1000; // 10분
+
+function readCache(): UnanalyzedGame[] | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw) as { data: UnanalyzedGame[]; ts: number };
+    if (Date.now() - ts > CACHE_TTL) return null;
+    return data;
+  } catch { return null; }
+}
+
+function writeCache(data: UnanalyzedGame[]) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
+function clearCache() {
+  try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+}
+
 export default function BatchAnalyzeSection() {
   const router = useRouter();
   const [games, setGames] = useState<UnanalyzedGame[]>([]);
@@ -23,11 +44,15 @@ export default function BatchAnalyzeSection() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<Record<string, GameProgress>>({});
 
-  const fetchGames = useCallback(() => {
+  const fetchGames = useCallback((force = false) => {
+    if (!force) {
+      const cached = readCache();
+      if (cached) { setGames(cached); setLoading(false); return; }
+    }
     setLoading(true);
     fetch("/api/unanalyzed-games")
       .then((r) => r.json())
-      .then((d) => setGames(d.games ?? []))
+      .then((d) => { const list = d.games ?? []; writeCache(list); setGames(list); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -96,7 +121,8 @@ export default function BatchAnalyzeSection() {
     }
 
     setRunning(false);
-    fetchGames();
+    clearCache();
+    fetchGames(true); // 캐시 무효화 + 강제 재조회
   }
 
   const statusIcon = (s: GameStatus) => ({
