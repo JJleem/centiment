@@ -67,15 +67,22 @@ async function fetchMZStorePage(
   startIndex: number
 ): Promise<MZReview[]> {
   const url = `https://itunes.apple.com/WebObjects/MZStore.woa/wa/userReviewsRow?id=${appId}&displayable-kind=11&startIndex=${startIndex}&endIndex=${startIndex + 19}&sort=4`;
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "iTunes/12.0 (Macintosh; OS X 10.15)",
-      "X-Apple-Store-Front": storefront,
-    },
-  });
-  if (!res.ok) return [];
-  const json = await res.json() as { userReviewList?: MZReview[] };
-  return json.userReviewList ?? [];
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "iTunes/12.0 (Macintosh; OS X 10.15)",
+        "X-Apple-Store-Front": storefront,
+      },
+    });
+    if (!res.ok) return [];
+    const json = await res.json() as { userReviewList?: MZReview[] };
+    return json.userReviewList ?? [];
+  } catch (e) {
+    // Apple CDN이 non-Latin1 응답 헤더를 보낼 때 undici ByteString 에러 발생
+    // 해당 페이지만 스킵하고 나머지 계속 수집
+    console.warn(`[fetch] MZStore page skipped (startIndex:${startIndex}):`, e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 async function fetchIosLocale(
@@ -84,23 +91,28 @@ async function fetchIosLocale(
   storefront: string,
   after?: string
 ): Promise<ScrapedReview[]> {
-  const pages = Math.ceil(PER_LOCALE / 20);
-  const results = await Promise.all(
-    Array.from({ length: pages }, (_, i) => fetchMZStorePage(appId, storefront, i * 20))
-  );
-  const cutoff = after ? new Date(after) : null;
-  return results.flat()
-    .slice(0, PER_LOCALE)
-    .filter((r) => !cutoff || new Date(r.date) > cutoff)
-    .map((r) => ({
-      app_id: appId,
-      platform: "ios" as Platform,
-      lang,
-      version: null,
-      rating: r.rating,
-      content: r.body,
-      review_date: new Date(r.date).toISOString(),
-    }));
+  try {
+    const pages = Math.ceil(PER_LOCALE / 20);
+    const results = await Promise.all(
+      Array.from({ length: pages }, (_, i) => fetchMZStorePage(appId, storefront, i * 20))
+    );
+    const cutoff = after ? new Date(after) : null;
+    return results.flat()
+      .slice(0, PER_LOCALE)
+      .filter((r) => !cutoff || new Date(r.date) > cutoff)
+      .map((r) => ({
+        app_id: appId,
+        platform: "ios" as Platform,
+        lang,
+        version: null,
+        rating: r.rating,
+        content: r.body,
+        review_date: new Date(r.date).toISOString(),
+      }));
+  } catch (e) {
+    console.warn(`[fetch] iOS locale ${lang} skipped:`, e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 async function fetchIosReviews(appId: string): Promise<ScrapedReview[]> {
