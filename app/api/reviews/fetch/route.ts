@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin as supabase } from "@/lib/supabase";
+// Supabase 클라이언트 완전 제거 — ByteString 오류 방지를 위해 raw fetch만 사용
 import type { FetchReviewsRequest, FetchReviewsResponse, Platform } from "@/types";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -39,25 +39,42 @@ interface MZReview {
   rating: number;
 }
 
+// ─── PostgREST raw fetch 헬퍼 ────────────────────────────────────────────────
+function pgUrl() { return process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(); }
+function pgKey() { return process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(); }
+function pgHeaders() {
+  return {
+    "apikey":        pgKey(),
+    "Authorization": `Bearer ${pgKey()}`,
+    "Content-Type":  "application/json",
+  };
+}
+
 // ─── DB 최신 날짜 조회 ────────────────────────────────────────────────────────
 async function getLatestDatesByLang(
   appId: string,
   platform: Platform
 ): Promise<Record<string, string>> {
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("lang, review_date")
-    .eq("app_id", appId)
-    .eq("platform", platform)
-    .order("review_date", { ascending: false });
-
-  if (error || !data) return {};
-
-  // lang별 최신 날짜만 (order desc이므로 첫 번째 등장이 최신)
-  return data.reduce<Record<string, string>>((acc, row) => {
-    if (!acc[row.lang]) acc[row.lang] = row.review_date;
-    return acc;
-  }, {});
+  try {
+    const params = new URLSearchParams({
+      select:    "lang,review_date",
+      app_id:    `eq.${appId}`,
+      platform:  `eq.${platform}`,
+      order:     "review_date.desc",
+    });
+    const res = await fetch(`${pgUrl()}/rest/v1/reviews?${params}`, {
+      headers: pgHeaders(),
+    });
+    if (!res.ok) return {};
+    const data = await res.json() as { lang: string; review_date: string }[];
+    return data.reduce<Record<string, string>>((acc, row) => {
+      if (!acc[row.lang]) acc[row.lang] = row.review_date;
+      return acc;
+    }, {});
+  } catch (e) {
+    console.warn("[fetch] getLatestDatesByLang failed:", e instanceof Error ? e.message : e);
+    return {};
+  }
 }
 
 // ─── iOS: 로케일별 수집 ───────────────────────────────────────────────────────
@@ -183,19 +200,11 @@ async function upsertReviews(
     fetched_at: new Date().toISOString(),
   }));
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim();
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
-
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/reviews?on_conflict=app_id%2Cplatform%2Ccontent%2Creview_date%2Clang`,
+    `${pgUrl()}/rest/v1/reviews?on_conflict=app_id%2Cplatform%2Ccontent%2Creview_date%2Clang`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey":        serviceKey,
-        "Authorization": `Bearer ${serviceKey}`,
-        "Prefer":        "resolution=ignore-duplicates,return=minimal",
-      },
+      headers: { ...pgHeaders(), "Prefer": "resolution=ignore-duplicates,return=minimal" },
       body: JSON.stringify(rows),
     }
   );
