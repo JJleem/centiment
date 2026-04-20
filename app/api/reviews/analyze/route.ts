@@ -22,6 +22,23 @@ interface UsageAcc {
   sonnet: { input_tokens: number; output_tokens: number };
 }
 
+// ─── 재시도 헬퍼 (529 Overloaded 대응) ───────────────────────────────────────
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const isOverloaded = msg.includes("overloaded") || msg.includes("529");
+      if (!isOverloaded || attempt === maxAttempts) throw e;
+      const delay = attempt * 8000; // 8s → 16s → 24s
+      console.warn(`[analyze][${label}] overloaded, retry ${attempt}/${maxAttempts} in ${delay / 1000}s`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 // ─── Haiku: 배치 분류 ─────────────────────────────────────────────────────────
 interface ClassifyResult {
   sentiment: Sentiment;
@@ -33,11 +50,14 @@ async function classifyBatch(
   batch: ReviewPayload[],
   usage: UsageAcc
 ): Promise<ClassifyResult[]> {
-  const res = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 8192,
-    messages: [{ role: "user", content: buildClassifyPrompt(batch) }],
-  });
+  const res = await withRetry(
+    () => anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: buildClassifyPrompt(batch) }],
+    }),
+    "haiku"
+  );
 
   console.log(
     `[analyze][haiku] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`
@@ -91,20 +111,23 @@ async function summarize(
     categoryCounts[r.category] = (categoryCounts[r.category] ?? 0) + 1;
   }
 
-  const res = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: buildSummaryPrompt({
-          total, positive, negative, neutral,
-          topKeywords, categoryCounts,
-          bugContents: bugContents.slice(0, 20),
-        }),
-      },
-    ],
-  });
+  const res = await withRetry(
+    () => anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: buildSummaryPrompt({
+            total, positive, negative, neutral,
+            topKeywords, categoryCounts,
+            bugContents: bugContents.slice(0, 20),
+          }),
+        },
+      ],
+    }),
+    "sonnet"
+  );
 
   console.log(
     `[analyze][sonnet] input:${res.usage.input_tokens} output:${res.usage.output_tokens}`
