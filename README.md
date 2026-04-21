@@ -5,6 +5,15 @@
 iOS · Android 리뷰를 자동 수집하고 Claude AI로 분석해 게임별·플랫폼별·국가별 인사이트를 제공하는 내부 분석 툴입니다.
 
 ---
+<br/>
+<img width="1470" height="799" alt="image" src="https://github.com/user-attachments/assets/31906365-a5ed-4802-b8cf-e87a1ebf09e6" />
+<br/>
+<img width="1470" height="800" alt="image" src="https://github.com/user-attachments/assets/73f6f2c5-bda8-4c72-a278-55cf60e819f6" />
+<br/>
+<img width="1470" height="800" alt="image" src="https://github.com/user-attachments/assets/299d6c15-ff45-4005-a58e-04e27798b148" />
+<br/>
+<img width="1470" height="803" alt="image" src="https://github.com/user-attachments/assets/fd4958b7-8cb6-4535-be4a-85b7a958b988" />
+<br/>
 
 ## 주요 기능
 
