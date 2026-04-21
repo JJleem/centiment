@@ -29,24 +29,33 @@ export interface CategoryInsight {
 async function generateAndSave(appId: string, platform: Platform): Promise<CategoryInsight[]> {
   const supabase = getSupabase();
 
-  // review_id FK로 JOIN — 인덱스 기반 매칭 대신 정확한 페어링
-  const { data, error } = await supabase
+  // Step 1: review_analysis 조회 (category + review_id)
+  const { data: analyses, error } = await supabase
     .from("review_analysis")
-    .select("category, reviews!inner(content)")
+    .select("category, review_id")
     .eq("app_id", appId)
     .eq("platform", platform);
 
-  if (error) {
-    console.error("[category-insights] query error:", error.message);
-    return [];
-  }
-  if (!data || data.length === 0) return [];
+  if (error) { console.error("[category-insights] query error:", error.message); return []; }
+  if (!analyses || analyses.length === 0) return [];
 
+  // Step 2: review_id → content 맵 구성
+  const reviewIds = analyses.filter((r) => r.review_id).map((r) => r.review_id as string);
+  const contentMap: Record<string, string> = {};
+  if (reviewIds.length > 0) {
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select("id, content")
+      .in("id", reviewIds);
+    for (const r of reviews ?? []) contentMap[r.id] = r.content;
+  }
+
+  // Step 3: 카테고리별 content 그룹핑
   const categoryContents: Partial<Record<ReviewCategory, string[]>> = {};
-  for (const row of data as { category: string; reviews: { content: string }[] }[]) {
+  for (const row of analyses) {
     const cat = row.category as ReviewCategory;
     if (!categoryContents[cat]) categoryContents[cat] = [];
-    const content = row.reviews?.[0]?.content;
+    const content = row.review_id ? contentMap[row.review_id] : undefined;
     if (content) categoryContents[cat]!.push(content);
   }
 

@@ -47,8 +47,7 @@ export default function AnalysisTimeline({ gameId }: { gameId: string }) {
   );
   if (timeline.length === 0) return null;
 
-  // 분석 1회뿐이면 타임라인 의미 없음
-  if (timeline.length < 2) return null;
+  if (timeline.length === 0) return null;
 
   return (
     <div className="space-y-0">

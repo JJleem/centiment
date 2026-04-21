@@ -24,6 +24,7 @@ import ReanalyzeButton from "@/components/ReanalyzeButton";
 import CsvExportButton from "@/components/CsvExportButton";
 import AnalysisTimeline from "@/components/AnalysisTimeline";
 import CategoryInsights from "@/components/CategoryInsights";
+import VersionAlertsList from "@/components/VersionAlertsList";
 import LangSentimentChart from "@/components/LangSentimentChart";
 import KeywordDrilldown from "@/components/KeywordDrilldown";
 import VersionTrendChart, { type VersionTrendData } from "@/components/VersionTrendChart";
@@ -466,31 +467,7 @@ async function Dashboard({ game_id }: { game_id: string }) {
           <div className="flex-1 min-w-0 space-y-5">
 
             {/* 버전 릴리즈 알림 */}
-            {allAlerts.length > 0 && (
-              <div className="space-y-2">
-                {allAlerts.map((alert, i) => {
-                  const isUp = alert.change > 0;
-                  return (
-                    <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs ${
-                      isUp ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
-                    }`}>
-                      {isUp ? <TrendingUp size={13} /> : <AlertCircle size={13} />}
-                      <span>
-                        <span className="font-semibold">{alert.platform} v{alert.version}</span>
-                        {" "}업데이트 후 긍정률{" "}
-                        <span className="font-bold">{isUp ? "+" : ""}{alert.change}%p {isUp ? "상승" : "하락"}</span>
-                        <span className="opacity-60 ml-1">(v{alert.prev} 대비)</span>
-                      </span>
-                      <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        isUp ? "bg-emerald-100 border-emerald-300 text-emerald-700" : "bg-rose-100 border-rose-300 text-rose-700"
-                      }`}>
-                        {isUp ? "호반응" : "급락 주의"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <VersionAlertsList alerts={allAlerts} />
 
             {/* AI 인사이트 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
