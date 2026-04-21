@@ -14,18 +14,29 @@ export interface HistoryItem {
 
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from("review_analysis")
-      .select("app_id, platform, sentiment, summary, created_at");
+    // Supabase PostgREST defaults to 1000 rows max — paginate to get all rows
+    const PAGE_SIZE = 1000;
+    const allData: { app_id: string; platform: string; sentiment: string; summary: string; created_at: string }[] = [];
+    let page = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("review_analysis")
+        .select("app_id, platform, sentiment, summary, created_at")
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) break;
+      allData.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      page++;
+    }
 
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) {
+    if (allData.length === 0) {
       return NextResponse.json({ history: [] });
     }
 
     const map = new Map<string, HistoryItem>();
 
-    for (const row of data) {
+    for (const row of allData) {
       const key = `${row.app_id}__${row.platform}`;
       if (!map.has(key)) {
         map.set(key, {
