@@ -57,10 +57,11 @@ Return ONLY a JSON array (no markdown, no explanation) with exactly ${batch.leng
 ]
 
 Rules:
-- sentiment: judge by review CONTENT first; use rating only as a tiebreaker when content is ambiguous
+- sentiment MUST be exactly one of: "positive", "negative", "neutral" — any other value (e.g. "mixed") is invalid
+  - judge by review CONTENT first; use rating only as a tiebreaker when content is ambiguous
   - positive: content expresses satisfaction, praise, or recommendation (regardless of rating)
   - negative: content expresses complaints, frustration, or criticism (regardless of rating)
-  - neutral: content is vague, too short to judge (e.g. "ㅎㅎ", "굿", "잘됨"), or genuinely balanced — do NOT force positive/negative on meaningless reviews
+  - neutral: vague/too short to judge (e.g. "ㅎㅎ", "굿", "잘됨"), genuinely balanced, or mixed feelings — use neutral for ambiguous cases
   - if rating and content strongly conflict, ALWAYS trust content over rating
 - category: pick the single most dominant topic
 - keywords: always output in English regardless of review language, lowercase, max 3 words each

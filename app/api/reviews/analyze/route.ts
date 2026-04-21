@@ -75,7 +75,13 @@ async function classifyBatch(
         parsed.push({ sentiment: "neutral", category: "other", keywords: [] });
       }
     }
-    return parsed.slice(0, batch.length);
+    const VALID_SENTIMENTS = new Set(["positive", "negative", "neutral"]);
+    const VALID_CATEGORIES = new Set(["gameplay", "ui", "performance", "monetization", "content", "bug", "other"]);
+    return parsed.slice(0, batch.length).map((r) => ({
+      sentiment: VALID_SENTIMENTS.has(r.sentiment) ? r.sentiment : "neutral" as Sentiment,
+      category:  VALID_CATEGORIES.has(r.category)  ? r.category  : "other"   as ReviewCategory,
+      keywords:  Array.isArray(r.keywords) ? r.keywords : [],
+    }));
   } catch {
     console.error("[analyze][haiku] JSON parse failed:", text.slice(0, 300));
     return batch.map(() => ({ sentiment: "neutral", category: "other", keywords: [] }));
