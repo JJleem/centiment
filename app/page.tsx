@@ -257,12 +257,22 @@ export default function HomePage() {
           >
             기획서 확인하기
           </a>
-          {analyzedGames.length > 0 && (
-            <span className="ml-auto text-[11px] text-zinc-400 hidden sm:flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              {analyzedGames.length}개 분석 완료
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            <a
+              href="https://centinel-beta.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-500 hover:to-cyan-500 shadow-sm shadow-sky-200 transition-all"
+            >
+              Centinel →
+            </a>
+            {analyzedGames.length > 0 && (
+              <span className="text-[11px] text-zinc-400 hidden sm:flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                {analyzedGames.length}개 분석 완료
+              </span>
+            )}
+          </div>
         </div>
       </header>
 

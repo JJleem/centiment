@@ -109,7 +109,7 @@ npm run dev
 
 ## 지원 게임
 
-Supercent 26개 타이틀 (`lib/presets.ts` 기준)  
+Supercent 25개 타이틀 (`lib/presets.ts` 기준)  
 Snake Clash!, Pizza Ready!, Burger Please!, Outlets Rush, Downhill Racer 외 21개
 
 ---
